@@ -12,7 +12,7 @@
 
     <header class="header">
       <h1><i class="ti ti-flask" aria-hidden="true"></i> Análise estatística de experimentos</h1>
-      <p>Escolha o tipo de experimento, carregue os dados e gere o relatório completo</p>
+      <p>Escolha o tipo de experimento, insira os dados e gere o relatório completo</p>
     </header>
 
     <nav class="step-bar" aria-label="Etapas">
@@ -25,33 +25,28 @@
 
     <main class="body">
 
-      <!-- ── Step 1: tipo ──────────────────────────────── -->
-      <section class="section visible" id="sec1" aria-label="Seleção do tipo de experimento">
+      <!-- ══ Step 1: tipo ════════════════════════════════ -->
+      <section class="section visible" id="sec1" aria-label="Tipo de experimento">
 
         <div class="field">
           <span class="label">Tipo de experimento</span>
-          <div class="type-grid" id="type-grid">
-
+          <div class="type-grid">
             <div class="type-card selected" data-type="anova1" tabindex="0" role="button" aria-pressed="true">
               <div class="card-name"><i class="ti ti-chart-bar" aria-hidden="true"></i> ANOVA univariado</div>
               <div class="card-desc">Uma variável dependente, um ou mais fatores. Testa diferença entre médias de grupos.</div>
             </div>
-
             <div class="type-card" data-type="anova2" tabindex="0" role="button" aria-pressed="false">
               <div class="card-name"><i class="ti ti-chart-dots-3" aria-hidden="true"></i> ANOVA multivariado</div>
               <div class="card-desc">Múltiplas variáveis dependentes simultaneamente (MANOVA).</div>
             </div>
-
             <div class="type-card" data-type="fat2k" tabindex="0" role="button" aria-pressed="false">
               <div class="card-name"><i class="ti ti-grid-dots" aria-hidden="true"></i> Planejamento 2<sup>k</sup></div>
               <div class="card-desc">Planejamento fatorial completo com k fatores em 2 níveis (−1 e +1).</div>
             </div>
-
             <div class="type-card" data-type="ccd" tabindex="0" role="button" aria-pressed="false">
               <div class="card-name"><i class="ti ti-focus-2" aria-hidden="true"></i> Composto central (CCD)</div>
               <div class="card-desc">Planejamento de superfície de resposta com pontos axiais e centrais.</div>
             </div>
-
           </div>
         </div>
 
@@ -69,7 +64,7 @@
 
         <div class="alert info">
           <i class="ti ti-info-circle" aria-hidden="true"></i>
-          <span id="type-info-text">ANOVA univariado: analisa se há diferença significativa entre as médias de grupos (fatores). Insira colunas de fator e uma coluna de resposta.</span>
+          <span id="type-info-text">ANOVA univariado: analisa se há diferença significativa entre as médias de grupos. Insira colunas de fator e uma coluna de resposta.</span>
         </div>
 
         <div class="footer-btns">
@@ -79,30 +74,95 @@
         </div>
       </section>
 
-      <!-- ── Step 2: upload ────────────────────────────── -->
-      <section class="section" id="sec2" aria-label="Upload do arquivo CSV">
+      <!-- ══ Step 2: dados ════════════════════════════════ -->
+      <section class="section" id="sec2" aria-label="Entrada de dados">
 
-        <div class="field">
-          <span class="label">Arquivo CSV</span>
-          <div class="upload-zone" id="upload-zone">
-            <input type="file" id="file-input" accept=".csv" aria-label="Selecionar arquivo CSV" />
-            <div class="upload-icon"><i class="ti ti-file-type-csv" aria-hidden="true"></i></div>
-            <p>Arraste o CSV aqui ou clique para selecionar</p>
-            <span>Primeira linha deve conter os nomes das colunas</span>
+        <!-- modo tabs -->
+        <div class="input-mode-tabs">
+          <button class="mode-tab active" id="tab-upload" onclick="switchMode('upload')">
+            <i class="ti ti-file-type-csv" aria-hidden="true"></i> Upload de CSV
+          </button>
+          <button class="mode-tab" id="tab-manual" onclick="switchMode('manual')">
+            <i class="ti ti-keyboard" aria-hidden="true"></i> Entrada manual
+          </button>
+        </div>
+
+        <!-- ── painel upload ── -->
+        <div id="panel-upload">
+          <div class="field" style="margin-top:1rem">
+            <div class="upload-zone" id="upload-zone">
+              <input type="file" id="file-input" accept=".csv" aria-label="Selecionar arquivo CSV" />
+              <div class="upload-icon"><i class="ti ti-file-type-csv" aria-hidden="true"></i></div>
+              <p>Arraste o CSV aqui ou clique para selecionar</p>
+              <span>Primeira linha deve conter os nomes das colunas</span>
+            </div>
+            <div class="file-badge" id="file-name-display" style="display:none">
+              <i class="ti ti-check" aria-hidden="true"></i>
+              <span id="file-name-text"></span>
+              <span id="file-rows-text" class="rows-count"></span>
+            </div>
           </div>
-          <div class="file-badge" id="file-name-display" style="display:none">
-            <i class="ti ti-check" aria-hidden="true"></i>
-            <span id="file-name-text"></span>
-            <span id="file-rows-text" class="rows-count"></span>
+          <div id="preview-area" style="display:none">
+            <span class="label">Pré-visualização (primeiras 5 linhas)</span>
+            <div class="table-wrap" id="preview-wrap"></div>
           </div>
         </div>
 
-        <div id="preview-area" style="display:none">
-          <span class="label">Pré-visualização (primeiras 5 linhas)</span>
-          <div class="table-wrap" id="preview-wrap"></div>
+        <!-- ── painel manual ── -->
+        <div id="panel-manual" style="display:none">
+
+          <!-- definição de variáveis -->
+          <div class="var-definition">
+
+            <div class="var-def-section">
+              <div class="var-def-header">
+                <span class="label" style="margin:0">Fatores de entrada</span>
+                <button class="btn-icon" onclick="addFactor()" title="Adicionar fator">
+                  <i class="ti ti-plus" aria-hidden="true"></i> Adicionar fator
+                </button>
+              </div>
+              <div id="factors-list"></div>
+            </div>
+
+            <div class="var-def-section" style="margin-top:1rem">
+              <div class="var-def-header">
+                <span class="label" style="margin:0">Variáveis de resposta</span>
+                <button class="btn-icon" onclick="addResponse()" title="Adicionar resposta">
+                  <i class="ti ti-plus" aria-hidden="true"></i> Adicionar resposta
+                </button>
+              </div>
+              <div id="responses-list"></div>
+            </div>
+
+          </div>
+
+          <!-- tabela de dados manuais -->
+          <div id="manual-table-section" style="display:none;margin-top:1.25rem">
+            <div class="var-def-header" style="margin-bottom:8px">
+              <span class="label" style="margin:0">Dados do experimento</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn-icon" onclick="addDataRow()">
+                  <i class="ti ti-row-insert-bottom" aria-hidden="true"></i> Linha
+                </button>
+                <button class="btn-icon danger-icon" onclick="removeLastRow()">
+                  <i class="ti ti-row-remove" aria-hidden="true"></i> Remover
+                </button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table editable-table" id="manual-data-table">
+                <thead id="manual-thead"></thead>
+                <tbody id="manual-tbody"></tbody>
+              </table>
+            </div>
+            <p class="help" style="margin-top:6px">
+              Clique em qualquer célula para editar. Para 2k/CCD use −1 e +1 (ou valores codificados).
+            </p>
+          </div>
+
         </div>
 
-        <div class="footer-btns">
+        <div class="footer-btns" style="margin-top:1.25rem">
           <button class="btn" onclick="goTo(1)"><i class="ti ti-arrow-left" aria-hidden="true"></i> Voltar</button>
           <button class="btn primary ml-auto" id="btn-to-3" disabled onclick="goTo(3)">
             Próximo <i class="ti ti-arrow-right" aria-hidden="true"></i>
@@ -110,17 +170,23 @@
         </div>
       </section>
 
-      <!-- ── Step 3: variáveis ─────────────────────────── -->
+      <!-- ══ Step 3: variáveis ════════════════════════════ -->
       <section class="section" id="sec3" aria-label="Classificação das variáveis">
 
         <div class="alert info">
           <i class="ti ti-info-circle" aria-hidden="true"></i>
-          Classifique cada coluna: <strong>Entrada</strong> (fator / variável independente) ou <strong>Saída</strong> (resposta / variável dependente).
+          Confirme a classificação de cada coluna: <strong>Entrada</strong> (fator) ou <strong>Saída</strong> (resposta).
         </div>
 
         <div class="field">
           <span class="label">Colunas detectadas</span>
           <div class="col-config" id="col-config"></div>
+        </div>
+
+        <!-- unidades inline (visível quando entrada manual) -->
+        <div id="units-review" style="display:none">
+          <span class="label">Nomes e unidades definidos</span>
+          <div class="units-grid" id="units-grid"></div>
         </div>
 
         <div id="var-warning" class="alert warn" style="display:none">
@@ -136,7 +202,7 @@
         </div>
       </section>
 
-      <!-- ── Step 4: processing ────────────────────────── -->
+      <!-- ══ Step 4: processing ═══════════════════════════ -->
       <section class="section" id="sec4" aria-label="Processando análise">
         <div class="processing">
           <div class="spinner" id="spinner" aria-hidden="true"></div>
@@ -145,7 +211,7 @@
         </div>
       </section>
 
-      <!-- ── Step 5: resultado ─────────────────────────── -->
+      <!-- ══ Step 5: resultado ════════════════════════════ -->
       <section class="section" id="sec5" aria-label="Relatório de resultados">
         <div id="result-container"></div>
         <div class="footer-btns result-footer">
