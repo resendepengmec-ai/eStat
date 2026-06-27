@@ -1,24 +1,29 @@
-/* ──────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
    Análise Estatística de Experimentos — app.js
-   ────────────────────────────────────────────────────────── */
+   ═══════════════════════════════════════════════════════════ */
 
 'use strict';
 
-// ── State ─────────────────────────────────────────────────
+/* ── Configuração da API ─────────────────────────────────────
+   Em produção, substitua a chamada direta por um proxy
+   backend que injete a chave server-side.
+   ──────────────────────────────────────────────────────────── */
+const API_URL   = 'https://api.anthropic.com/v1/messages';
+const API_MODEL = 'claude-sonnet-4-6';
 
+/* ── Estado global ──────────────────────────────────────────── */
 const state = {
-  type:       'anova1',
-  k:          2,
+  type:       'anova1',   // anova1 | anova2 | fat2k | ccd
+  k:          2,           // número de fatores (2–6)
   csvText:    '',
-  headers:    [],
-  rows:       [],
-  colRoles:   {},
-  result:     null,
-  reportText: '',
+  headers:    [],          // nomes das colunas
+  rows:       [],          // linhas como arrays de strings
+  colRoles:   {},          // { colName: 'entrada' | 'saida' | 'ignorar' }
+  result:     null,        // JSON retornado pela API
+  reportText: '',          // texto do relatório para exportação
 };
 
-// ── Descriptions ───────────────────────────────────────────
-
+/* ── Descrições por tipo ────────────────────────────────────── */
 const TYPE_INFO = {
   anova1: 'ANOVA univariado: analisa se há diferença significativa entre as médias de grupos. Insira colunas de fator (entrada) e uma coluna de resposta (saída).',
   anova2: 'ANOVA multivariado (MANOVA): múltiplas variáveis de resposta analisadas simultaneamente. Insira fatores (entrada) e 2+ colunas de resposta (saída).',
@@ -29,19 +34,20 @@ const TYPE_INFO = {
 const TYPE_LABEL = {
   anova1: 'ANOVA Univariado',
   anova2: 'ANOVA Multivariado (MANOVA)',
-  fat2k:  `Planejamento Fatorial 2^k`,
+  fat2k:  'Planejamento Fatorial 2^k',
   ccd:    'Planejamento Composto Central (CCD)',
 };
 
-// ── Boot ───────────────────────────────────────────────────
-
+/* ── Inicialização ──────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   bindTypeCards();
   bindKButtons();
   bindUpload();
 });
 
-// ── Navigation ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   NAVEGAÇÃO ENTRE ETAPAS
+   ════════════════════════════════════════════════════════════ */
 
 function goTo(n) {
   if (n === 3 && !state.headers.length) return;
@@ -67,12 +73,14 @@ function goTo(n) {
 function renderStep(n) {
   for (let i = 1; i <= 5; i++) {
     document.getElementById(`sec${i}`).classList.toggle('visible', i === n);
+
     const ind = document.getElementById(`step${i}-ind`);
     ind.classList.remove('active', 'done');
     const dot = ind.querySelector('.dot');
 
     if (i < n) {
       ind.classList.add('done');
+      ind.removeAttribute('aria-current');
       dot.innerHTML = '<i class="ti ti-check" style="font-size:10px" aria-hidden="true"></i>';
     } else if (i === n) {
       ind.classList.add('active');
@@ -85,12 +93,16 @@ function renderStep(n) {
   }
 }
 
-// ── Type cards ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   STEP 1 — TIPO DE EXPERIMENTO
+   ════════════════════════════════════════════════════════════ */
 
 function bindTypeCards() {
   document.querySelectorAll('.type-card').forEach(card => {
     card.addEventListener('click',   () => selectType(card));
-    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectType(card); } });
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectType(card); }
+    });
   });
 }
 
@@ -101,14 +113,12 @@ function selectType(card) {
   });
   card.classList.add('selected');
   card.setAttribute('aria-pressed', 'true');
+
   state.type = card.dataset.type;
-
   document.getElementById('type-info-text').textContent = TYPE_INFO[state.type];
-  const kField = document.getElementById('k-field');
-  kField.style.display = (state.type === 'fat2k' || state.type === 'ccd') ? '' : 'none';
+  document.getElementById('k-field').style.display =
+    (state.type === 'fat2k' || state.type === 'ccd') ? '' : 'none';
 }
-
-// ── k buttons ──────────────────────────────────────────────
 
 function bindKButtons() {
   document.querySelectorAll('.k-btn').forEach(btn => {
@@ -120,26 +130,28 @@ function bindKButtons() {
   });
 }
 
-// ── File upload ────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   STEP 2 — UPLOAD DO CSV
+   ════════════════════════════════════════════════════════════ */
 
 function bindUpload() {
   const zone  = document.getElementById('upload-zone');
   const input = document.getElementById('file-input');
 
-  input.addEventListener('change', e => handleFile(e.target.files[0]));
+  input.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
 
   zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('dragleave', ()  => zone.classList.remove('drag'));
   zone.addEventListener('drop', e => {
     e.preventDefault();
     zone.classList.remove('drag');
-    const f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
   });
 }
 
 function handleFile(file) {
-  if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
     state.csvText = ev.target.result;
@@ -149,20 +161,18 @@ function handleFile(file) {
     document.getElementById('file-rows-text').textContent = `${state.rows.length} linhas`;
     document.getElementById('file-name-display').style.display = 'flex';
     document.getElementById('btn-to-3').disabled = false;
-
     renderPreview();
   };
   reader.readAsText(file);
 }
 
-// ── CSV parsing ────────────────────────────────────────────
-
+/* ── CSV parsing ─────────────────────────────────────────── */
 function parseCSV(text) {
   const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
   state.headers = parseCSVLine(lines[0]);
   state.rows    = lines.slice(1).map(parseCSVLine);
 
-  // default roles: all-but-last → entrada, last → saida
+  // padrão: tudo menos a última coluna → entrada; última → saída
   state.colRoles = {};
   state.headers.forEach((h, i) => {
     state.colRoles[h] = i < state.headers.length - 1 ? 'entrada' : 'saida';
@@ -170,47 +180,50 @@ function parseCSV(text) {
 }
 
 function parseCSVLine(line) {
-  const res = [];
-  let cur = '', inQ = false;
+  const result = [];
+  let cur = '', inQuote = false;
   for (const ch of line) {
-    if (ch === '"')             { inQ = !inQ; }
-    else if (ch === ',' && !inQ){ res.push(cur.trim()); cur = ''; }
-    else                        { cur += ch; }
+    if (ch === '"')              { inQuote = !inQuote; }
+    else if (ch === ',' && !inQuote) { result.push(cur.trim()); cur = ''; }
+    else                         { cur += ch; }
   }
-  res.push(cur.trim());
-  return res;
+  result.push(cur.trim());
+  return result;
 }
 
 function renderPreview() {
-  const wrap = document.getElementById('preview-wrap');
-  const rows = state.rows.slice(0, 5);
-
-  let html = '<table class="preview-table"><thead><tr>';
-  state.headers.forEach(h => { html += `<th>${escHtml(h)}</th>`; });
+  const preview = state.rows.slice(0, 5);
+  let html = '<table class="data-table"><thead><tr>';
+  state.headers.forEach(h => { html += `<th>${esc(h)}</th>`; });
   html += '</tr></thead><tbody>';
-  rows.forEach(r => {
+  preview.forEach(row => {
     html += '<tr>';
-    r.forEach(c => { html += `<td>${escHtml(c)}</td>`; });
+    row.forEach(cell => { html += `<td>${esc(cell)}</td>`; });
     html += '</tr>';
   });
   html += '</tbody></table>';
-  wrap.innerHTML = html;
+
+  document.getElementById('preview-wrap').innerHTML = html;
   document.getElementById('preview-area').style.display = '';
 }
 
-// ── Variable config ────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   STEP 3 — CLASSIFICAÇÃO DE VARIÁVEIS
+   ════════════════════════════════════════════════════════════ */
 
 function buildColConfig() {
-  const cfg = document.getElementById('col-config');
-  cfg.innerHTML = state.headers.map(h => {
-    const r = state.colRoles[h];
+  document.getElementById('col-config').innerHTML = state.headers.map(h => {
+    const role = state.colRoles[h];
     return `
     <div class="col-row">
-      <span class="col-name" title="${escHtml(h)}">${escHtml(h)}</span>
+      <span class="col-name" title="${esc(h)}">${esc(h)}</span>
       <div class="col-role">
-        <button class="role-btn ${r === 'entrada' ? 'entrada' : ''}" onclick="setRole('${escAttr(h)}','entrada')">Entrada</button>
-        <button class="role-btn ${r === 'saida'   ? 'saida'   : ''}" onclick="setRole('${escAttr(h)}','saida')">Saída</button>
-        <button class="role-btn ${r === 'ignorar' ? 'ignorar' : ''}" onclick="setRole('${escAttr(h)}','ignorar')">Ignorar</button>
+        <button class="role-btn ${role === 'entrada' ? 'entrada' : ''}"
+          onclick="setRole('${escAttr(h)}','entrada')">Entrada</button>
+        <button class="role-btn ${role === 'saida' ? 'saida' : ''}"
+          onclick="setRole('${escAttr(h)}','saida')">Saída</button>
+        <button class="role-btn ${role === 'ignorar' ? 'ignorar' : ''}"
+          onclick="setRole('${escAttr(h)}','ignorar')">Ignorar</button>
       </div>
     </div>`;
   }).join('');
@@ -240,7 +253,9 @@ function validateVars() {
 function activeInputs()  { return state.headers.filter(h => state.colRoles[h] === 'entrada'); }
 function activeOutputs() { return state.headers.filter(h => state.colRoles[h] === 'saida'); }
 
-// ── Analysis ───────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   STEP 4 — ANÁLISE VIA API
+   ════════════════════════════════════════════════════════════ */
 
 function logProc(msg) {
   const log = document.getElementById('proc-log');
@@ -250,64 +265,70 @@ function logProc(msg) {
 
 async function runAnalysis() {
   document.getElementById('proc-log').textContent = '';
-  document.getElementById('proc-msg').textContent  = 'Preparando dados...';
+  document.getElementById('proc-msg').textContent = 'Preparando dados...';
+  document.getElementById('spinner').style.borderTopColor = '';
+  document.getElementById('spinner').style.display = '';
 
   const inputs  = activeInputs();
   const outputs = activeOutputs();
-  const label   = TYPE_LABEL[state.type] + (state.type === 'fat2k' ? ` com k=${state.k}` : '');
+  const label   = TYPE_LABEL[state.type]
+    + (state.type === 'fat2k' ? ` com k=${state.k}` : '');
 
   logProc(`> Tipo: ${label}`);
   logProc(`> Entradas: ${inputs.join(', ')}`);
   logProc(`> Saídas: ${outputs.join(', ')}`);
-  logProc(`> Linhas: ${state.rows.length}`);
+  logProc(`> Linhas de dados: ${state.rows.length}`);
   logProc('> Chamando API de análise...');
   document.getElementById('proc-msg').textContent = 'Analisando com IA...';
 
-  const activeCols = [...inputs, ...outputs];
-  const csvSubset  = buildSubsetCSV(activeCols);
-  const prompt     = buildPrompt(csvSubset, inputs, outputs, label);
+  const csvSubset = buildSubsetCSV([...inputs, ...outputs]);
+  const prompt    = buildPrompt(csvSubset, inputs, outputs, label);
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch(API_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model:      'claude-sonnet-4-6',
+        model:      API_MODEL,
         max_tokens: 4000,
         messages:   [{ role: 'user', content: prompt }],
       }),
     });
 
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(`HTTP ${resp.status}: ${err?.error?.message || resp.statusText}`);
+    }
 
     const data = await resp.json();
-    logProc('> Resposta recebida, processando...');
+    logProc('> Resposta recebida. Processando...');
 
     let text = (data.content || []).map(i => i.text || '').join('');
     text = text.replace(/```json|```/g, '').trim();
-    const firstBrace = text.indexOf('{');
-    const lastBrace  = text.lastIndexOf('}');
-    if (firstBrace === -1) throw new Error('JSON não encontrado na resposta.');
-    text = text.slice(firstBrace, lastBrace + 1);
+    const first = text.indexOf('{');
+    const last  = text.lastIndexOf('}');
+    if (first === -1) throw new Error('JSON não encontrado na resposta da API.');
+    text = text.slice(first, last + 1);
 
     state.result     = JSON.parse(text);
     state.reportText = buildReportText(state.result, label, inputs, outputs);
 
     logProc('> Análise concluída com sucesso!');
     document.getElementById('proc-msg').textContent = 'Concluído!';
-    document.getElementById('spinner').style.borderTopColor = 'var(--color-success)';
+    document.getElementById('spinner').style.borderTopColor = 'var(--success)';
 
-    setTimeout(() => renderResults(state.result, label), 600);
+    setTimeout(() => renderResults(state.result, label), 700);
 
   } catch (err) {
     document.getElementById('spinner').style.display = 'none';
     document.getElementById('proc-msg').textContent  = 'Erro na análise.';
-    logProc(`> Erro: ${err.message}`);
+    logProc(`> ERRO: ${err.message}`);
     logProc('> Verifique o formato do CSV e tente novamente.');
-    document.getElementById('proc-log').style.borderColor = 'var(--color-danger-border)';
+    document.getElementById('proc-log').style.borderColor = 'var(--danger-border)';
   }
 }
 
+/* ── Monta CSV apenas com colunas ativas ─────────────────── */
 function buildSubsetCSV(cols) {
   const idxMap = cols.map(c => state.headers.indexOf(c));
   const header = cols.join(',');
@@ -315,6 +336,7 @@ function buildSubsetCSV(cols) {
   return [header, ...rows].join('\n');
 }
 
+/* ── Prompt enviado à API ────────────────────────────────── */
 function buildPrompt(csv, inputs, outputs, label) {
   return `Você é um estatístico especializado em planejamento de experimentos. Analise os dados abaixo usando ${label}.
 
@@ -326,7 +348,7 @@ Variáveis de saída (respostas): ${outputs.join(', ')}
 Tipo de análise: ${label}
 ${state.type === 'fat2k' || state.type === 'ccd' ? `k = ${state.k}` : ''}
 
-Faça a análise completa e retorne SOMENTE um JSON com esta estrutura (sem markdown, sem texto fora do JSON):
+Faça a análise completa e retorne SOMENTE um objeto JSON válido com esta estrutura (sem markdown, sem texto fora do JSON):
 {
   "resumo": "Texto em português com resumo executivo da análise (2-3 parágrafos)",
   "estatisticas_descritivas": {
@@ -340,42 +362,45 @@ Faça a análise completa e retorne SOMENTE um JSON com esta estrutura (sem mark
   "efeitos": [
     {"nome":"nome","estimativa":0.0,"erro_padrao":0.0,"t":0.0,"p_valor":0.0}
   ],
-  "r2":0.0,
-  "r2_ajustado":0.0,
-  "conclusao":"Texto detalhado com conclusões, interpretações e recomendações em português",
-  "dados_graficos":{
-    "medias_por_grupo":[{"grupo":"nome","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],
-    "residuos":[0.0],
-    "valores_ajustados":[0.0],
-    "efeitos_principais":[{"fator":"nome","nivel_baixo":0.0,"nivel_alto":0.0}]
+  "r2": 0.0,
+  "r2_ajustado": 0.0,
+  "conclusao": "Texto detalhado com conclusões, interpretações e recomendações em português",
+  "dados_graficos": {
+    "medias_por_grupo": [{"grupo":"nome","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],
+    "residuos": [0.0],
+    "valores_ajustados": [0.0],
+    "efeitos_principais": [{"fator":"nome","nivel_baixo":0.0,"nivel_alto":0.0}]
   }
 }
 
 Calcule todos os valores numericamente com base nos dados fornecidos. Use valores reais, não exemplos.`;
 }
 
-// ── Results rendering ──────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   STEP 5 — RENDERIZAÇÃO DOS RESULTADOS
+   ════════════════════════════════════════════════════════════ */
 
 function renderResults(r, label) {
   renderStep(5);
 
-  const r2pct  = r.r2           != null ? (r.r2 * 100).toFixed(1)           : '—';
-  const r2apct = r.r2_ajustado  != null ? (r.r2_ajustado * 100).toFixed(1)  : '—';
+  const r2pct  = r.r2          != null ? (r.r2 * 100).toFixed(1) + '%' : '—';
+  const r2apct = r.r2_ajustado != null ? (r.r2_ajustado * 100).toFixed(1) + '%' : '—';
 
   document.getElementById('result-container').innerHTML = `
     <div class="result-section">
       <h3>
-        <i class="ti ti-info-circle" aria-hidden="true"></i> Resumo — ${escHtml(label)}
-        <span class="badge blue" style="margin-left:auto">R² = ${r2pct}%</span>
-        <span class="badge green" style="margin-left:4px">R² aj. = ${r2apct}%</span>
+        <i class="ti ti-info-circle" aria-hidden="true"></i>
+        Resumo — ${esc(label)}
+        <span class="badge blue" style="margin-left:auto">R² = ${r2pct}</span>
+        <span class="badge green" style="margin-left:4px">R² aj. = ${r2apct}</span>
       </h3>
-      <div class="result-text">${escHtml(r.resumo || '—')}</div>
+      <div class="result-text">${esc(r.resumo || '—')}</div>
     </div>
 
     <div class="result-section">
       <h3><i class="ti ti-table" aria-hidden="true"></i> Estatísticas descritivas</h3>
-      <div class="preview-table-wrap">
-        <table class="preview-table">
+      <div class="table-wrap">
+        <table class="data-table">
           <thead><tr>
             <th>Variável</th><th>n</th><th>Média</th><th>DP</th>
             <th>Mín</th><th>Mediana</th><th>Máx</th><th>CV%</th>
@@ -387,8 +412,8 @@ function renderResults(r, label) {
 
     <div class="result-section">
       <h3><i class="ti ti-math" aria-hidden="true"></i> Tabela ANOVA</h3>
-      <div class="preview-table-wrap">
-        <table class="preview-table">
+      <div class="table-wrap">
+        <table class="data-table">
           <thead><tr>
             <th>Fonte</th><th>GL</th><th>SQ</th><th>QM</th><th>F</th><th>p-valor</th><th>Sig.</th>
           </tr></thead>
@@ -399,8 +424,8 @@ function renderResults(r, label) {
 
     <div class="result-section">
       <h3><i class="ti ti-arrows-shuffle" aria-hidden="true"></i> Estimativas dos efeitos</h3>
-      <div class="preview-table-wrap">
-        <table class="preview-table">
+      <div class="table-wrap">
+        <table class="data-table">
           <thead><tr>
             <th>Efeito</th><th>Estimativa</th><th>Erro padrão</th><th>t</th><th>p-valor</th>
           </tr></thead>
@@ -412,16 +437,28 @@ function renderResults(r, label) {
     <div class="result-section">
       <h3><i class="ti ti-chart-area" aria-hidden="true"></i> Gráficos</h3>
       <div class="charts-grid">
-        <div class="chart-wrap"><div class="chart-title">Médias por grupo com IC 95%</div><canvas id="ch-means"></canvas></div>
-        <div class="chart-wrap"><div class="chart-title">Efeitos principais</div><canvas id="ch-effects"></canvas></div>
-        <div class="chart-wrap"><div class="chart-title">Resíduos vs. valores ajustados</div><canvas id="ch-resid"></canvas></div>
-        <div class="chart-wrap"><div class="chart-title">Distribuição dos resíduos</div><canvas id="ch-hist"></canvas></div>
+        <div class="chart-wrap">
+          <div class="chart-title">Médias por grupo com IC 95%</div>
+          <canvas id="ch-means"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Efeitos principais</div>
+          <canvas id="ch-effects"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Resíduos vs. valores ajustados</div>
+          <canvas id="ch-resid"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Distribuição dos resíduos</div>
+          <canvas id="ch-hist"></canvas>
+        </div>
       </div>
     </div>
 
     <div class="result-section">
       <h3><i class="ti ti-notes" aria-hidden="true"></i> Conclusões e recomendações</h3>
-      <div class="result-text">${escHtml(r.conclusao || '—')}</div>
+      <div class="result-text">${esc(r.conclusao || '—')}</div>
     </div>
   `;
 
@@ -431,11 +468,12 @@ function renderResults(r, label) {
   setTimeout(() => drawCharts(r), 80);
 }
 
+/* ── Preenchimento das tabelas ───────────────────────────── */
 function fillDescTable(r) {
   const tbody = document.getElementById('desc-tbody');
   (r.estatisticas_descritivas?.por_variavel || []).forEach(v => {
     tbody.innerHTML += `<tr>
-      <td>${escHtml(v.variavel)}</td>
+      <td>${esc(v.variavel)}</td>
       <td>${v.n}</td>
       <td>${fmt(v.media)}</td><td>${fmt(v.dp)}</td>
       <td>${fmt(v.min)}</td><td>${fmt(v.mediana)}</td>
@@ -449,13 +487,17 @@ function fillAnovaTable(r) {
   (r.tabela_anova || []).forEach(row => {
     const sig = row.significativo;
     tbody.innerHTML += `<tr>
-      <td><strong>${escHtml(row.fonte)}</strong></td>
+      <td><strong>${esc(row.fonte)}</strong></td>
       <td>${row.gl}</td>
       <td>${fmt(row.sq)}</td><td>${fmt(row.qm)}</td><td>${fmt(row.f)}</td>
-      <td style="color:${sig ? 'var(--color-success-text)' : 'var(--text-muted)'}">${row.p_valor?.toFixed(4) ?? '—'}</td>
-      <td>${sig
-        ? '<span class="badge green">*</span>'
-        : '<span style="color:var(--text-muted);font-size:12px">ns</span>'}</td>
+      <td style="color:${sig ? 'var(--success-text)' : 'var(--text-muted)'}">
+        ${row.p_valor?.toFixed(4) ?? '—'}
+      </td>
+      <td>
+        ${sig
+          ? '<span class="badge green">*</span>'
+          : '<span style="color:var(--text-muted);font-size:12px">ns</span>'}
+      </td>
     </tr>`;
   });
 }
@@ -465,27 +507,37 @@ function fillEffectsTable(r) {
   (r.efeitos || []).forEach(e => {
     const sig = e.p_valor < 0.05;
     tbody.innerHTML += `<tr>
-      <td>${escHtml(e.nome)}</td>
+      <td>${esc(e.nome)}</td>
       <td>${fmt(e.estimativa)}</td>
       <td>${fmt(e.erro_padrao)}</td>
       <td>${fmt(e.t)}</td>
-      <td style="color:${sig ? 'var(--color-success-text)' : 'var(--text-muted)'}">${e.p_valor?.toFixed(4) ?? '—'}</td>
+      <td style="color:${sig ? 'var(--success-text)' : 'var(--text-muted)'}">
+        ${e.p_valor?.toFixed(4) ?? '—'}
+      </td>
     </tr>`;
   });
 }
 
-// ── Charts ─────────────────────────────────────────────────
+/* ── Gráficos (Chart.js) ─────────────────────────────────── */
+const PALETTE = ['#378ADD', '#1D9E75', '#D85A30', '#D4537E', '#BA7517', '#7F77DD'];
 
 function drawCharts(r) {
   const gd = r.dados_graficos || {};
-
-  drawMeans(gd.medias_por_grupo   || []);
+  drawMeans(gd.medias_por_grupo    || []);
   drawEffects(gd.efeitos_principais || []);
   drawResid(gd.residuos || [], gd.valores_ajustados || []);
   drawHist(gd.residuos  || []);
 }
 
-const PALETTE = ['#378ADD','#1D9E75','#D85A30','#D4537E','#BA7517','#7F77DD'];
+function chartDefaults() {
+  return {
+    plugins: { legend: { labels: { color: getComputedStyle(document.body).getPropertyValue('--text-secondary').trim() || '#666' } } },
+    scales: {
+      x: { ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-muted').trim() || '#888' } },
+      y: { ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-muted').trim() || '#888' } },
+    },
+  };
+}
 
 function drawMeans(means) {
   const el = document.getElementById('ch-means');
@@ -522,14 +574,11 @@ function drawEffects(ef) {
         data:            [e.nivel_baixo, e.nivel_alto],
         borderColor:     PALETTE[i % PALETTE.length],
         backgroundColor: 'transparent',
-        tension:  0.1,
-        pointRadius: 5,
+        tension:         0.1,
+        pointRadius:     5,
       })),
     },
-    options: {
-      responsive: true,
-      scales: { y: { beginAtZero: false } },
-    },
+    options: { responsive: true, scales: { y: { beginAtZero: false } } },
   });
 }
 
@@ -541,7 +590,10 @@ function drawResid(residuos, ajustados) {
     data: {
       datasets: [{
         label:           'Resíduos',
-        data:            ajustados.map((f, i) => ({ x: parseFloat(f), y: parseFloat(residuos[i] ?? 0) })),
+        data:            ajustados.map((f, i) => ({
+          x: parseFloat(f),
+          y: parseFloat(residuos[i] ?? 0),
+        })),
         backgroundColor: 'rgba(55,138,221,0.55)',
         pointRadius:     5,
       }],
@@ -594,86 +646,116 @@ function drawHist(residuos) {
   });
 }
 
-// ── Report export ──────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   EXPORTAÇÃO DO RELATÓRIO
+   ════════════════════════════════════════════════════════════ */
 
 function buildReportText(r, label, inputs, outputs) {
-  const sep  = '='.repeat(50);
-  const sep2 = '-'.repeat(30);
+  const SEP  = '='.repeat(52);
+  const sep2 = '-'.repeat(32);
   const r2pct  = r.r2          != null ? (r.r2 * 100).toFixed(2) + '%' : '—';
   const r2apct = r.r2_ajustado != null ? (r.r2_ajustado * 100).toFixed(2) + '%' : '—';
 
-  let t = `RELATÓRIO DE ANÁLISE ESTATÍSTICA\n${sep}\n\n`;
+  let t = `RELATÓRIO DE ANÁLISE ESTATÍSTICA\n${SEP}\n\n`;
   t += `Tipo de análise  : ${label}\n`;
   t += `Variáveis entrada: ${inputs.join(', ')}\n`;
-  t += `Variáveis saída  : ${outputs.join(', ')}\n\n`;
+  t += `Variáveis saída  : ${outputs.join(', ')}\n`;
+  t += `Data             : ${new Date().toLocaleString('pt-BR')}\n\n`;
+
   t += `RESUMO EXECUTIVO\n${sep2}\n${r.resumo || '—'}\n\n`;
   t += `R² = ${r2pct}   R² ajustado = ${r2apct}\n\n`;
 
   t += `ESTATÍSTICAS DESCRITIVAS\n${sep2}\n`;
   (r.estatisticas_descritivas?.por_variavel || []).forEach(v => {
-    t += `${v.variavel}: n=${v.n}, média=${fmt(v.media)}, dp=${fmt(v.dp)}, min=${fmt(v.min)}, max=${fmt(v.max)}, CV=${fmt(v.cv)}%\n`;
+    t += `${v.variavel}: n=${v.n}, média=${fmt(v.media)}, DP=${fmt(v.dp)}, `;
+    t += `mín=${fmt(v.min)}, mediana=${fmt(v.mediana)}, máx=${fmt(v.max)}, CV=${fmt(v.cv)}%\n`;
   });
 
   t += `\nTABELA ANOVA\n${sep2}\n`;
   (r.tabela_anova || []).forEach(row => {
-    t += `${row.fonte}: GL=${row.gl}, SQ=${fmt(row.sq)}, QM=${fmt(row.qm)}, F=${fmt(row.f)}, p=${row.p_valor?.toFixed(4)} ${row.significativo ? '*' : 'ns'}\n`;
+    t += `${row.fonte}: GL=${row.gl}, SQ=${fmt(row.sq)}, QM=${fmt(row.qm)}, `;
+    t += `F=${fmt(row.f)}, p=${row.p_valor?.toFixed(4)} ${row.significativo ? '(*)' : '(ns)'}\n`;
   });
 
-  t += `\nEFEITOS\n${sep2}\n`;
+  t += `\nESTIMATIVAS DOS EFEITOS\n${sep2}\n`;
   (r.efeitos || []).forEach(e => {
-    t += `${e.nome}: Est=${fmt(e.estimativa)}, EP=${fmt(e.erro_padrao)}, t=${fmt(e.t)}, p=${e.p_valor?.toFixed(4)}\n`;
+    t += `${e.nome}: Est=${fmt(e.estimativa)}, EP=${fmt(e.erro_padrao)}, `;
+    t += `t=${fmt(e.t)}, p=${e.p_valor?.toFixed(4)}\n`;
   });
 
-  t += `\nCONCLUSÃO\n${sep2}\n${r.conclusao || '—'}\n`;
+  t += `\nCONCLUSÕES E RECOMENDAÇÕES\n${sep2}\n${r.conclusao || '—'}\n`;
   return t;
 }
 
 function exportReport() {
-  if (!state.reportText) return;
+  if (!state.reportText) { alert('Nenhum relatório disponível. Execute a análise primeiro.'); return; }
   const blob = new Blob([state.reportText], { type: 'text/plain;charset=utf-8' });
-  const a    = document.createElement('a');
+  const a = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
-  a.download = 'relatorio_experimento.txt';
+  a.download = `relatorio_experimento_${Date.now()}.txt`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-// ── Restart / Finish ───────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   REINICIAR / FINALIZAR
+   ════════════════════════════════════════════════════════════ */
 
 function restart() {
-  Object.assign(state, { type: 'anova1', k: 2, csvText: '', headers: [], rows: [], colRoles: {}, result: null, reportText: '' });
+  if (!confirm('Reiniciar apagará os dados e resultados atuais. Confirma?')) return;
 
-  document.querySelectorAll('.type-card').forEach(c => { c.classList.remove('selected'); c.setAttribute('aria-pressed','false'); });
+  Object.assign(state, {
+    type: 'anova1', k: 2,
+    csvText: '', headers: [], rows: [], colRoles: {},
+    result: null, reportText: '',
+  });
+
+  // reset tipo
+  document.querySelectorAll('.type-card').forEach(c => {
+    c.classList.remove('selected'); c.setAttribute('aria-pressed', 'false');
+  });
   document.querySelector('[data-type="anova1"]').classList.add('selected');
-  document.querySelector('[data-type="anova1"]').setAttribute('aria-pressed','true');
+  document.querySelector('[data-type="anova1"]').setAttribute('aria-pressed', 'true');
 
+  // reset k
   document.querySelectorAll('.k-btn').forEach(b => b.classList.remove('selected'));
   document.querySelector('[data-k="2"]').classList.add('selected');
 
+  // reset upload
   document.getElementById('file-name-display').style.display = 'none';
   document.getElementById('preview-area').style.display      = 'none';
   document.getElementById('btn-to-3').disabled               = true;
   document.getElementById('file-input').value                = '';
-  document.getElementById('k-field').style.display           = 'none';
-  document.getElementById('type-info-text').textContent      = TYPE_INFO.anova1;
-  document.getElementById('spinner').style.borderTopColor    = '';
-  document.getElementById('spinner').style.display           = '';
+
+  // reset info
+  document.getElementById('k-field').style.display      = 'none';
+  document.getElementById('type-info-text').textContent  = TYPE_INFO.anova1;
+  document.getElementById('var-warning').style.display   = 'none';
+  document.getElementById('proc-log').style.borderColor  = '';
 
   renderStep(1);
 }
 
 function finish() {
-  alert('Análise finalizada. Obrigado por usar a ferramenta!');
+  if (confirm('Deseja encerrar a análise? A página será recarregada.')) {
+    window.location.reload();
+  }
 }
 
-// ── Helpers ────────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   UTILITÁRIOS
+   ════════════════════════════════════════════════════════════ */
 
+/** Formata número para 3 casas decimais */
 function fmt(v) {
   if (v == null || v === '') return '—';
   return parseFloat(v).toFixed(3);
 }
 
-function escHtml(s) {
+/** Escapa HTML */
+function esc(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -681,6 +763,7 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
+/** Escapa aspas simples para uso em atributos onclick */
 function escAttr(s) {
-  return String(s ?? '').replace(/'/g, "\\'");
+  return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }

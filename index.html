@@ -16,37 +16,42 @@
     </header>
 
     <nav class="step-bar" aria-label="Etapas">
-      <div class="step active" id="step1-ind" aria-current="step"><div class="dot">1</div>Tipo</div>
-      <div class="step" id="step2-ind"><div class="dot">2</div>Dados</div>
-      <div class="step" id="step3-ind"><div class="dot">3</div>Variáveis</div>
-      <div class="step" id="step4-ind"><div class="dot">4</div>Processar</div>
-      <div class="step" id="step5-ind"><div class="dot">5</div>Relatório</div>
+      <div class="step active" id="step1-ind" aria-current="step"><div class="dot">1</div><span>Tipo</span></div>
+      <div class="step" id="step2-ind"><div class="dot">2</div><span>Dados</span></div>
+      <div class="step" id="step3-ind"><div class="dot">3</div><span>Variáveis</span></div>
+      <div class="step" id="step4-ind"><div class="dot">4</div><span>Processar</span></div>
+      <div class="step" id="step5-ind"><div class="dot">5</div><span>Relatório</span></div>
     </nav>
 
     <main class="body">
 
-      <!-- ── Step 1: tipo ─────────────────────────────────── -->
+      <!-- ── Step 1: tipo ──────────────────────────────── -->
       <section class="section visible" id="sec1" aria-label="Seleção do tipo de experimento">
 
         <div class="field">
           <span class="label">Tipo de experimento</span>
           <div class="type-grid" id="type-grid">
+
             <div class="type-card selected" data-type="anova1" tabindex="0" role="button" aria-pressed="true">
-              <div class="name"><i class="ti ti-chart-bar" aria-hidden="true"></i> ANOVA univariado</div>
-              <div class="desc">Uma variável dependente, um ou mais fatores. Testa diferença entre médias de grupos.</div>
+              <div class="card-name"><i class="ti ti-chart-bar" aria-hidden="true"></i> ANOVA univariado</div>
+              <div class="card-desc">Uma variável dependente, um ou mais fatores. Testa diferença entre médias de grupos.</div>
             </div>
+
             <div class="type-card" data-type="anova2" tabindex="0" role="button" aria-pressed="false">
-              <div class="name"><i class="ti ti-chart-dots-3" aria-hidden="true"></i> ANOVA multivariado</div>
-              <div class="desc">Múltiplas variáveis dependentes simultaneamente (MANOVA).</div>
+              <div class="card-name"><i class="ti ti-chart-dots-3" aria-hidden="true"></i> ANOVA multivariado</div>
+              <div class="card-desc">Múltiplas variáveis dependentes simultaneamente (MANOVA).</div>
             </div>
+
             <div class="type-card" data-type="fat2k" tabindex="0" role="button" aria-pressed="false">
-              <div class="name"><i class="ti ti-grid-dots" aria-hidden="true"></i> Planejamento 2<sup>k</sup></div>
-              <div class="desc">Planejamento fatorial completo com k fatores em 2 níveis (−1 e +1).</div>
+              <div class="card-name"><i class="ti ti-grid-dots" aria-hidden="true"></i> Planejamento 2<sup>k</sup></div>
+              <div class="card-desc">Planejamento fatorial completo com k fatores em 2 níveis (−1 e +1).</div>
             </div>
+
             <div class="type-card" data-type="ccd" tabindex="0" role="button" aria-pressed="false">
-              <div class="name"><i class="ti ti-focus-2" aria-hidden="true"></i> Composto central (CCD)</div>
-              <div class="desc">Planejamento de superfície de resposta com pontos axiais e centrais.</div>
+              <div class="card-name"><i class="ti ti-focus-2" aria-hidden="true"></i> Composto central (CCD)</div>
+              <div class="card-desc">Planejamento de superfície de resposta com pontos axiais e centrais.</div>
             </div>
+
           </div>
         </div>
 
@@ -62,7 +67,7 @@
           <p class="help">Número de fatores controlados no experimento.</p>
         </div>
 
-        <div class="alert info" id="type-info">
+        <div class="alert info">
           <i class="ti ti-info-circle" aria-hidden="true"></i>
           <span id="type-info-text">ANOVA univariado: analisa se há diferença significativa entre as médias de grupos (fatores). Insira colunas de fator e uma coluna de resposta.</span>
         </div>
@@ -74,27 +79,27 @@
         </div>
       </section>
 
-      <!-- ── Step 2: upload ───────────────────────────────── -->
+      <!-- ── Step 2: upload ────────────────────────────── -->
       <section class="section" id="sec2" aria-label="Upload do arquivo CSV">
 
         <div class="field">
           <span class="label">Arquivo CSV</span>
           <div class="upload-zone" id="upload-zone">
             <input type="file" id="file-input" accept=".csv" aria-label="Selecionar arquivo CSV" />
-            <div class="icon"><i class="ti ti-file-type-csv" aria-hidden="true"></i></div>
+            <div class="upload-icon"><i class="ti ti-file-type-csv" aria-hidden="true"></i></div>
             <p>Arraste o CSV aqui ou clique para selecionar</p>
             <span>Primeira linha deve conter os nomes das colunas</span>
           </div>
-          <div class="file-name" id="file-name-display" style="display:none">
+          <div class="file-badge" id="file-name-display" style="display:none">
             <i class="ti ti-check" aria-hidden="true"></i>
             <span id="file-name-text"></span>
-            <span id="file-rows-text"></span>
+            <span id="file-rows-text" class="rows-count"></span>
           </div>
         </div>
 
         <div id="preview-area" style="display:none">
           <span class="label">Pré-visualização (primeiras 5 linhas)</span>
-          <div class="preview-table-wrap" id="preview-wrap"></div>
+          <div class="table-wrap" id="preview-wrap"></div>
         </div>
 
         <div class="footer-btns">
@@ -105,7 +110,7 @@
         </div>
       </section>
 
-      <!-- ── Step 3: variáveis ────────────────────────────── -->
+      <!-- ── Step 3: variáveis ─────────────────────────── -->
       <section class="section" id="sec3" aria-label="Classificação das variáveis">
 
         <div class="alert info">
@@ -131,7 +136,7 @@
         </div>
       </section>
 
-      <!-- ── Step 4: processing ───────────────────────────── -->
+      <!-- ── Step 4: processing ────────────────────────── -->
       <section class="section" id="sec4" aria-label="Processando análise">
         <div class="processing">
           <div class="spinner" id="spinner" aria-hidden="true"></div>
@@ -140,14 +145,14 @@
         </div>
       </section>
 
-      <!-- ── Step 5: resultado ────────────────────────────── -->
+      <!-- ── Step 5: resultado ─────────────────────────── -->
       <section class="section" id="sec5" aria-label="Relatório de resultados">
         <div id="result-container"></div>
-        <div class="footer-btns">
+        <div class="footer-btns result-footer">
           <button class="btn danger" onclick="restart()">
             <i class="ti ti-refresh" aria-hidden="true"></i> Reiniciar
           </button>
-          <button class="btn ml-auto" onclick="exportReport()">
+          <button class="btn" onclick="exportReport()">
             <i class="ti ti-download" aria-hidden="true"></i> Exportar relatório
           </button>
           <button class="btn primary" onclick="finish()">

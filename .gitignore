@@ -1,18 +1,23 @@
-# OS
+# Sistema operacional
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Editors
+# Editores
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Local env / secrets
+# Segredos — NUNCA versionar chaves de API
 .env
 .env.local
+.env.*.local
 *.key
+secrets.js
 
 # Node (se adicionar build tools futuramente)
 node_modules/
 dist/
+.cache/
