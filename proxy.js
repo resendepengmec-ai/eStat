@@ -3,11 +3,11 @@
  * proxy.js — Proxy local para a API Anthropic
  * ─────────────────────────────────────────────
  * Uso:
- *   ANTHROPIC_API_KEY=sk-ant-... node proxy.js
+ *   Windows CMD:   set ANTHROPIC_API_KEY=sk-ant-... && node proxy.js
+ *   Windows PS:    $env:ANTHROPIC_API_KEY="sk-ant-..."; node proxy.js
+ *   Linux/macOS:   ANTHROPIC_API_KEY=sk-ant-... node proxy.js
  *
- * O servidor escuta em http://localhost:3001
- *   POST /api/analyze  →  repassa para api.anthropic.com/v1/messages
- *   GET  /             →  serve index.html (e arquivos estáticos)
+ *   Porta alternativa:  PORT=3002 node proxy.js
  *
  * Não requer npm install. Usa apenas módulos nativos do Node.js (≥ 18).
  */
@@ -23,19 +23,29 @@ const url   = require('url');
 /* ── Configuração ──────────────────────────────────────────── */
 const PORT    = parseInt(process.env.PORT || '3001', 10);
 const API_KEY = process.env.ANTHROPIC_API_KEY || '';
-const ANTHROPIC_HOST = 'api.anthropic.com';
-const ANTHROPIC_PATH = '/v1/messages';
-const ROOT   = __dirname;   // pasta onde está o proxy.js
+const ROOT    = __dirname;
 
 if (!API_KEY) {
-  console.error('\n⚠  ANTHROPIC_API_KEY não definida.');
-  console.error('   Defina antes de iniciar:');
-  console.error('   Windows:  set ANTHROPIC_API_KEY=sk-ant-...');
-  console.error('   Linux/Mac: export ANTHROPIC_API_KEY=sk-ant-...\n');
+  console.error('\n╔══════════════════════════════════════════════════════╗');
+  console.error('║  ⚠  ANTHROPIC_API_KEY não definida                  ║');
+  console.error('╠══════════════════════════════════════════════════════╣');
+  console.error('║  Windows CMD:                                        ║');
+  console.error('║    set ANTHROPIC_API_KEY=sk-ant-SuaChaveAqui        ║');
+  console.error('║    node proxy.js                                     ║');
+  console.error('║                                                      ║');
+  console.error('║  Windows PowerShell:                                 ║');
+  console.error('║    $env:ANTHROPIC_API_KEY="sk-ant-SuaChaveAqui"    ║');
+  console.error('║    node proxy.js                                     ║');
+  console.error('║                                                      ║');
+  console.error('║  Linux / macOS:                                      ║');
+  console.error('║    export ANTHROPIC_API_KEY=sk-ant-SuaChaveAqui    ║');
+  console.error('║    node proxy.js                                     ║');
+  console.error('║                                                      ║');
+  console.error('║  Obtenha sua chave em: https://console.anthropic.com║');
+  console.error('╚══════════════════════════════════════════════════════╝\n');
   process.exit(1);
 }
 
-/* ── Mapa de tipos MIME para arquivos estáticos ────────────── */
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css':  'text/css; charset=utf-8',
@@ -47,65 +57,77 @@ const MIME = {
   '.svg':  'image/svg+xml',
 };
 
-/* ── Servidor HTTP ─────────────────────────────────────────── */
-const server = http.createServer((req, res) => {
+/* ── Helpers ───────────────────────────────────────────────── */
+function jsonError(res, status, message) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: { message } }));
+}
 
-  // Cabeçalhos CORS — permite chamadas do próprio localhost em qualquer porta
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
 
-  // Preflight OPTIONS
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
+/* ── Servidor ──────────────────────────────────────────────── */
+const server = http.createServer((req, res) => {
+  setCors(res);
 
-  const parsed = url.parse(req.url);
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  /* ── POST /api/analyze → proxy para Anthropic ───────────── */
-  if (req.method === 'POST' && parsed.pathname === '/api/analyze') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
+  const { pathname } = url.parse(req.url);
+
+  /* ── POST /api/analyze ─────────────────────────────────── */
+  if (req.method === 'POST' && pathname === '/api/analyze') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
     req.on('end', () => {
-      // Valida JSON básico
+      const raw = Buffer.concat(chunks).toString();
+
       let payload;
-      try { payload = JSON.parse(body); }
-      catch {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'Payload inválido' } }));
-        return;
-      }
+      try { payload = JSON.parse(raw); }
+      catch { return jsonError(res, 400, 'JSON inválido no corpo da requisição.'); }
+
+      // Garante max_tokens razoável
+      if (!payload.max_tokens || payload.max_tokens < 1000) payload.max_tokens = 4000;
 
       const bodyStr = JSON.stringify(payload);
 
-      const options = {
-        hostname: ANTHROPIC_HOST,
+      const opts = {
+        hostname: 'api.anthropic.com',
         port:     443,
-        path:     ANTHROPIC_PATH,
+        path:     '/v1/messages',
         method:   'POST',
+        timeout:  120000, // 2 min
         headers: {
-          'Content-Type':       'application/json',
-          'Content-Length':     Buffer.byteLength(bodyStr),
-          'x-api-key':          API_KEY,
-          'anthropic-version':  '2023-06-01',
+          'Content-Type':      'application/json',
+          'Content-Length':    Buffer.byteLength(bodyStr),
+          'x-api-key':         API_KEY,
+          'anthropic-version': '2023-06-01',
         },
       };
 
-      const proxyReq = https.request(options, proxyRes => {
-        let data = '';
-        proxyRes.on('data', chunk => { data += chunk; });
+      console.log(`[${new Date().toLocaleTimeString()}] → Anthropic API  model=${payload.model}  max_tokens=${payload.max_tokens}`);
+
+      const proxyReq = https.request(opts, proxyRes => {
+        const parts = [];
+        proxyRes.on('data', c => parts.push(c));
         proxyRes.on('end', () => {
+          const body = Buffer.concat(parts).toString();
+          console.log(`[${new Date().toLocaleTimeString()}] ← Status ${proxyRes.statusCode}  bytes=${body.length}`);
           res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
-          res.end(data);
+          res.end(body);
         });
       });
 
+      proxyReq.on('timeout', () => {
+        proxyReq.destroy();
+        jsonError(res, 504, 'Tempo limite excedido ao chamar a API Anthropic (2 min).');
+      });
+
       proxyReq.on('error', err => {
-        console.error('Erro ao conectar à API Anthropic:', err.message);
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'Proxy: erro de conexão com a API.' } }));
+        console.error(`[ERRO] ${err.message}`);
+        jsonError(res, 502, `Falha ao conectar à API Anthropic: ${err.message}`);
       });
 
       proxyReq.write(bodyStr);
@@ -114,11 +136,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  /* ── GET arquivos estáticos ──────────────────────────────── */
-  let filePath = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
-  filePath = path.join(ROOT, filePath);
+  /* ── Arquivos estáticos ────────────────────────────────── */
+  let filePath = pathname === '/' ? '/index.html' : pathname;
+  filePath = path.join(ROOT, filePath.replace(/\.\./g, '')); // bloqueia traversal
 
-  // Segurança: impede path traversal (../)
   if (!filePath.startsWith(ROOT)) {
     res.writeHead(403); res.end('Proibido'); return;
   }
@@ -126,26 +147,30 @@ const server = http.createServer((req, res) => {
   fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Arquivo não encontrado: ' + parsed.pathname);
+      res.end(`Arquivo não encontrado: ${pathname}`);
       return;
     }
     const ext  = path.extname(filePath).toLowerCase();
-    const mime = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
     res.end(data);
   });
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log('\n✅ Proxy local iniciado com sucesso!');
-  console.log(`   Abra no navegador: http://localhost:${PORT}`);
-  console.log('\n   Pressione Ctrl+C para encerrar.\n');
+  console.log('\n╔══════════════════════════════════════════════════════╗');
+  console.log('║  ✅  Proxy iniciado com sucesso!                     ║');
+  console.log('╠══════════════════════════════════════════════════════╣');
+  console.log(`║  Abra no navegador:  http://localhost:${PORT}           ║`);
+  console.log('║                                                      ║');
+  console.log('║  NÃO abra index.html diretamente — use o link acima ║');
+  console.log('║  Pressione Ctrl+C para encerrar                     ║');
+  console.log('╚══════════════════════════════════════════════════════╝\n');
 });
 
 server.on('error', err => {
   if (err.code === 'EADDRINUSE') {
     console.error(`\n✗ Porta ${PORT} já está em uso.`);
-    console.error(`  Encerre o processo que usa a porta ou defina outra:  PORT=3002 node proxy.js\n`);
+    console.error(`  Tente:  PORT=3002 node proxy.js\n`);
   } else {
     console.error('\n✗ Erro no servidor:', err.message);
   }

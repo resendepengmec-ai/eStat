@@ -355,6 +355,15 @@
          STEP 4 — PROCESSAR
          ══════════════════════════════════════════════════════ -->
     <section class="section" id="sec4" aria-label="Processando análise">
+      <div class="alert info" id="proxy-reminder" style="margin-bottom:1rem;align-items:flex-start">
+        <i class="ti ti-server" style="flex-shrink:0;margin-top:2px"></i>
+        <span style="font-size:12.5px;line-height:1.6">
+          A análise requer o <strong>proxy local</strong> em execução.<br>
+          Caso ainda não iniciou: abra um terminal na pasta do projeto e execute
+          <code style="font-family:var(--font-mono);font-size:11px;background:rgba(0,0,0,0.09);padding:1px 6px;border-radius:4px;white-space:nowrap">node proxy.js</code>
+          — depois acesse <strong>http://localhost:3001</strong> (não abra o index.html diretamente).
+        </span>
+      </div>
       <div class="processing">
         <div class="spinner" id="spinner"></div>
         <p id="proc-msg">Enviando dados para análise...</p>

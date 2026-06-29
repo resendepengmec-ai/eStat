@@ -1000,19 +1000,39 @@ async function runAnalysis(){
 
   const csvSubset=buildSubsetCSV([...inputs,...outputs]);
   const prompt=buildPrompt(csvSubset,inputs,outputs,label);
-  const maxTokens = state.type==='ccd' ? 6000
-    : (state.type==='fat2k' && state.k>=4) ? 6000
-    : state.type==='anova2' ? 5000
-    : 4000;
+  // max_tokens: cresce com k e número de saídas
+  const nOutputs = outputs.length;
+  const maxTokens = Math.min(8000,
+    (state.type==='ccd'                          ? 6000 :
+     state.type==='fat2k' && state.k>=4          ? 6000 :
+     state.type==='fat2k'                        ? 5000 :
+     state.type==='anova2'                       ? 5000 : 4000)
+    + (nOutputs > 1 ? (nOutputs-1) * 500 : 0)
+  );
 
   try{
-    const resp=await fetch(API_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:API_MODEL,max_tokens:maxTokens,messages:[{role:'user',content:prompt}]}),
-    });
+    let resp;
+    try {
+      resp = await fetch(API_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:API_MODEL,max_tokens:maxTokens,messages:[{role:'user',content:prompt}]}),
+      });
+    } catch(fetchErr) {
+      // Failed to fetch = proxy não está respondendo
+      throw new Error(
+        'Não foi possível conectar ao proxy local (http://localhost:3001).\n' +
+        'Verifique se o proxy está rodando:\n' +
+        '  1. Abra um terminal na pasta do projeto\n' +
+        '  2. Execute:  node proxy.js\n' +
+        '  3. Acesse:   http://localhost:3001  (não abra o index.html diretamente)'
+      );
+    }
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); throw new Error(`HTTP ${resp.status}: ${e?.error?.message||resp.statusText}`); }
     const data=await resp.json();
+    // Oculta aviso do proxy — conexão funcionou
+    const proxyReminder = document.getElementById('proxy-reminder');
+    if (proxyReminder) proxyReminder.style.display = 'none';
     const raw=(data.content||[]).map(i=>i.text||'').join('');
     logProc('> Resposta recebida. Processando...');
     const parsed=extractJSON(raw);
@@ -1025,8 +1045,16 @@ async function runAnalysis(){
   } catch(err){
     document.getElementById('spinner').style.display='none';
     document.getElementById('proc-msg').textContent='Erro na análise.';
-    logProc(`> ERRO: ${err.message}`);
-    logProc('> Verifique os dados e tente novamente.');
+    // Mostra cada linha da mensagem de erro separada
+    err.message.split('\n').forEach((line, i) => {
+      logProc(i===0 ? `> ERRO: ${line}` : `>       ${line}`);
+    });
+    logProc('');
+    if (!err.message.includes('proxy')) {
+      logProc('> Outras sugestões:');
+      logProc('  - Confirme que os dados são numéricos (use vírgula como decimal)');
+      logProc('  - Tente novamente (pode ser instabilidade temporária da API)');
+    }
     document.getElementById('proc-log').style.borderColor='var(--danger-border)';
   }
 }
