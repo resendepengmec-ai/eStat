@@ -70,6 +70,26 @@ function initDefaults() {
   state.ccd.responses = [{id:uid(),name:'',unit:''}];
 }
 
+/* ── Wrappers para mudança de réplicas (atualizam state antes de rebuild) ── */
+function a1OnReplicaChange(val) {
+  state.a1.replicas = Math.max(1, parseInt(val,10)||1);
+  a1RebuildTable();
+}
+function a2OnReplicaChange(val) {
+  state.a2.replicas = Math.max(1, parseInt(val,10)||1);
+  a2RebuildTable();
+}
+function fat2kOnReplicaChange(val) {
+  fat2kSyncFromDOM();
+  state.fat2k.replicas = Math.max(1, parseInt(val,10)||1);
+  fat2kRebuildTable();
+}
+function ccdOnCenterPtsChange(val) {
+  ccdSyncFromDOM();
+  state.ccd.centerPts = Math.max(1, parseInt(val,10)||1);
+  ccdRebuildTable();
+}
+
 /* ════════════════════════════════════════════════════════════
    STEP 1 — TIPO
    ════════════════════════════════════════════════════════════ */
@@ -217,11 +237,13 @@ function renderA1() {
 }
 
 function a1AddGroup() {
+  a1SyncFromDOM();  // salva nomes já digitados antes de adicionar novo
   state.a1.groups.push({id:uid(),name:'',unit:''});
   renderA1Groups(); a1RebuildTable();
 }
 
 function a1RemoveGroup(id) {
+  a1SyncFromDOM();  // salva nomes antes de remover
   state.a1.groups = state.a1.groups.filter(g=>g.id!==id);
   renderA1Groups(); a1RebuildTable();
 }
@@ -251,20 +273,22 @@ function renderA1Groups() {
 
 function a1SyncFromDOM() {
   document.querySelectorAll('#a1-groups-list .group-row').forEach(row => {
-    const id = parseInt(row.dataset.id,10);
-    const g  = state.a1.groups.find(x=>x.id===id);
+    const g = state.a1.groups.find(x=>x.id===parseInt(row.dataset.id,10));
     if (!g) return;
     const ins = row.querySelectorAll('input');
-    g.name = ins[0]?.value??g.name;
-    g.unit = ins[1]?.value??g.unit;
+    if(ins[0]) g.name = ins[0].value;
+    if(ins[1]) g.unit = ins[1].value;
   });
-  state.a1.respName = document.getElementById('a1-resp-name')?.value??'';
-  state.a1.respUnit = document.getElementById('a1-resp-unit')?.value??'';
-  state.a1.replicas = parseInt(document.getElementById('a1-replicas')?.value||'3',10);
+  const nameEl = document.getElementById('a1-resp-name');
+  const unitEl = document.getElementById('a1-resp-unit');
+  const repEl  = document.getElementById('a1-replicas');
+  if(nameEl) state.a1.respName = nameEl.value;
+  if(unitEl) state.a1.respUnit = unitEl.value;
+  if(repEl)  state.a1.replicas = parseInt(repEl.value||'3',10);
 }
 
 function a1RebuildTable() {
-  a1SyncFromDOM();
+  // NÃO sincroniza do DOM aqui — só lê o state (evita apagar dados na inicialização)
   const thead = document.getElementById('a1-thead');
   const tbody = document.getElementById('a1-tbody');
   if (!thead||!tbody) return;
@@ -314,11 +338,18 @@ function commitA1() {
   const hasData = rawData.some(row=>row.some(v=>v.trim()!==''));
   if (!hasData) return 'Preencha pelo menos uma célula de resposta na tabela.';
 
+  // Valida que os valores preenchidos são numéricos
+  for (let gi=0; gi<rawData.length; gi++) {
+    for (const v of rawData[gi]) {
+      if (v.trim()!=='' && !isNumericVal(v))
+        return `Valor inválido "${v}" no grupo "${state.a1.groups[gi]?.name||gi+1}". Use ponto ou vírgula como separador decimal (ex: 12,5 ou 12.5).`;
+    }
+  }
+
   const reps   = state.a1.replicas;
   const resp   = state.a1.respName.trim();
   const groups = state.a1.groups;
 
-  // monta: tratamento, resposta (formato longo: uma linha por observação)
   state.headers  = ['tratamento', resp];
   state.colRoles = { 'tratamento':'entrada', [resp]:'saida' };
   state.rows = [];
@@ -326,7 +357,8 @@ function commitA1() {
     const vals = rawData[gi]||[];
     for(let r=0;r<reps;r++) {
       const v = vals[r]?.trim()??'';
-      if(v!=='') state.rows.push([g.name.trim(), v]);
+      // BUG 5 fix: normaliza vírgula→ponto antes de enviar ao CSV
+      if(v!=='') state.rows.push([g.name.trim(), normalizeNum(v)]);
     }
   });
   if (!state.rows.length) return 'Nenhum dado numérico encontrado. Preencha a tabela de réplicas.';
@@ -341,18 +373,22 @@ function renderA2() {
 }
 
 function a2AddGroup() {
+  a2SyncFromDOM();
   state.a2.groups.push({id:uid(),name:''});
   renderA2Groups(); a2RebuildTable();
 }
 function a2RemoveGroup(id) {
+  a2SyncFromDOM();
   state.a2.groups=state.a2.groups.filter(g=>g.id!==id);
   renderA2Groups(); a2RebuildTable();
 }
 function a2AddResponse() {
+  a2SyncFromDOM();
   state.a2.responses.push({id:uid(),name:'',unit:''});
   renderA2Responses(); a2RebuildTable();
 }
 function a2RemoveResponse(id) {
+  a2SyncFromDOM();
   state.a2.responses=state.a2.responses.filter(r=>r.id!==id);
   renderA2Responses(); a2RebuildTable();
 }
@@ -389,17 +425,18 @@ function renderA2Responses() {
 function a2SyncFromDOM() {
   document.querySelectorAll('#a2-groups-list .group-row').forEach(row => {
     const g=state.a2.groups.find(x=>x.id===parseInt(row.dataset.id,10));
-    if(g) g.name=row.querySelector('input')?.value??g.name;
+    if(g){ const el=row.querySelector('input'); if(el) g.name=el.value; }
   });
   document.querySelectorAll('#a2-responses-list .var-row').forEach(row => {
     const r=state.a2.responses.find(x=>x.id===parseInt(row.dataset.id,10));
-    if(r){ const ins=row.querySelectorAll('input'); r.name=ins[0]?.value??r.name; r.unit=ins[1]?.value??r.unit; }
+    if(r){ const ins=row.querySelectorAll('input'); if(ins[0]) r.name=ins[0].value; if(ins[1]) r.unit=ins[1].value; }
   });
-  state.a2.replicas=parseInt(document.getElementById('a2-replicas')?.value||'3',10);
+  const repEl=document.getElementById('a2-replicas');
+  if(repEl) state.a2.replicas=parseInt(repEl.value||'3',10);
 }
 
 function a2RebuildTable() {
-  a2SyncFromDOM();
+  // NÃO sincroniza do DOM aqui
   const thead=document.getElementById('a2-thead');
   const tbody=document.getElementById('a2-tbody');
   if(!thead||!tbody) return;
@@ -446,6 +483,14 @@ function commitA2() {
   const hasData=rawData.some(row=>row.some(v=>v.trim()!==''));
   if(!hasData) return 'Preencha a tabela de dados.';
 
+  // Valida numéricos
+  for(let ri=0;ri<rawData.length;ri++){
+    for(const v of rawData[ri]){
+      if(v.trim()!==''&&!isNumericVal(v))
+        return `Valor inválido "${v}". Use ponto ou vírgula como decimal (ex: 12,5 ou 12.5).`;
+    }
+  }
+
   const reps=state.a2.replicas;
   const groups=state.a2.groups; const resps=state.a2.responses;
   state.headers=['grupo',...resps.map(r=>r.name.trim())];
@@ -455,7 +500,8 @@ function commitA2() {
   groups.forEach((g,gi)=>{
     for(let r=0;r<reps;r++){
       const vals=rawData[gi*reps+r]||[];
-      const row=[g.name.trim(),...resps.map((_,ci)=>vals[ci]?.trim()||'')];
+      // BUG 5 fix: normaliza decimais
+      const row=[g.name.trim(),...resps.map((_,ci)=>normalizeNum(vals[ci]?.trim()||''))];
       if(row.slice(1).some(v=>v!=='')) state.rows.push(row);
     }
   });
@@ -472,10 +518,12 @@ function renderFat2k() {
 }
 
 function fat2kAddResponse() {
+  fat2kSyncFromDOM();
   state.fat2k.responses.push({id:uid(),name:'',unit:''});
   renderFat2kResponses(); fat2kRebuildTable();
 }
 function fat2kRemoveResponse(id) {
+  fat2kSyncFromDOM();
   state.fat2k.responses=state.fat2k.responses.filter(r=>r.id!==id);
   renderFat2kResponses(); fat2kRebuildTable();
 }
@@ -485,13 +533,13 @@ function renderFat2kFactors() {
   el.innerHTML=state.fat2k.factors.map((f,i)=>`
   <div class="var-row-5" data-id="${f.id}">
     <input type="text" placeholder="ex: Temperatura" value="${esc(f.name)}"
-      aria-label="Nome fator ${i+1}" />
+      aria-label="Nome fator ${i+1}" oninput="fat2kSyncFromDOM();fat2kRebuildTable()" />
     <input type="text" class="unit-input" placeholder="ex: °C" value="${esc(f.unit)}"
-      aria-label="Unidade fator ${i+1}" />
+      aria-label="Unidade fator ${i+1}" oninput="fat2kSyncFromDOM();fat2kRebuildTable()" />
     <input type="text" class="level-input" placeholder="ex: 60" value="${esc(f.lo)}"
-      aria-label="Nível baixo fator ${i+1}" />
+      aria-label="Nível baixo fator ${i+1}" oninput="fat2kSyncFromDOM();fat2kRebuildTable()" />
     <input type="text" class="level-input" placeholder="ex: 80" value="${esc(f.hi)}"
-      aria-label="Nível alto fator ${i+1}" />
+      aria-label="Nível alto fator ${i+1}" oninput="fat2kSyncFromDOM();fat2kRebuildTable()" />
     <span style="color:var(--text-muted);font-size:11px;text-align:center">F${i+1}</span>
   </div>`).join('');
 }
@@ -514,16 +562,20 @@ function fat2kSyncFromDOM() {
     const f=state.fat2k.factors.find(x=>x.id===parseInt(row.dataset.id,10));
     if(!f) return;
     const ins=row.querySelectorAll('input');
-    f.name=ins[0]?.value??f.name; f.unit=ins[1]?.value??f.unit;
-    f.lo=ins[2]?.value??f.lo; f.hi=ins[3]?.value??f.hi;
+    if(ins[0]) f.name=ins[0].value;
+    if(ins[1]) f.unit=ins[1].value;
+    if(ins[2]) f.lo=ins[2].value;
+    if(ins[3]) f.hi=ins[3].value;
   });
   document.querySelectorAll('#fat2k-responses-list .var-row').forEach(row=>{
     const r=state.fat2k.responses.find(x=>x.id===parseInt(row.dataset.id,10));
     if(!r) return;
     const ins=row.querySelectorAll('input');
-    r.name=ins[0]?.value??r.name; r.unit=ins[1]?.value??r.unit;
+    if(ins[0]) r.name=ins[0].value;
+    if(ins[1]) r.unit=ins[1].value;
   });
-  state.fat2k.replicas=parseInt(document.getElementById('fat2k-replicas')?.value||'1',10);
+  const repEl=document.getElementById('fat2k-replicas');
+  if(repEl) state.fat2k.replicas=parseInt(repEl.value||'1',10);
 }
 
 // Gera matriz de Yates para k fatores
@@ -542,7 +594,7 @@ function yatesMatrix(k) {
 }
 
 function fat2kRebuildTable() {
-  fat2kSyncFromDOM();
+  // NÃO sincroniza do DOM aqui
   const thead=document.getElementById('fat2k-thead');
   const tbody=document.getElementById('fat2k-tbody');
   if(!thead||!tbody) return;
@@ -616,7 +668,12 @@ function commitFat2k() {
   const hasData=respVals.some(v=>v.trim()!=='');
   if(!hasData) return 'Preencha pelo menos uma célula de resposta na tabela de Yates.';
 
-  // monta CSV: fator1, fator2, ..., resp1_R1, resp1_R2, resp2_R1, ...
+  // Valida numéricos nas células de resposta
+  for(const v of respVals){
+    if(v.trim()!==''&&!isNumericVal(v))
+      return `Valor inválido "${v}" nas respostas. Use ponto ou vírgula como decimal (ex: 12,5 ou 12.5). Não use separador de milhar.`;
+  }
+
   const factorHeaders=factors.map(f=>f.name.trim());
   const respHeaders=[];
   resps.forEach(r=>{ for(let rep=1;rep<=reps;rep++) respHeaders.push(reps>1?`${r.name.trim()}_R${rep}`:r.name.trim()); });
@@ -629,10 +686,11 @@ function commitFat2k() {
   state.rows=[];
   const nResp=resps.length*reps;
   mat.forEach((rowCoded,ri)=>{
-    const row=rowCoded.map(String);
+    const row=rowCoded.map(String); // colunas codificadas −1/+1 ficam como texto
     for(let c=0;c<nResp;c++){
       const idx=ri*nResp+c;
-      row.push(respVals[idx]??'');
+      // BUG 14 fix: normaliza vírgula→ponto nas respostas
+      row.push(normalizeNum(respVals[idx]??''));
     }
     state.rows.push(row);
   });
@@ -648,10 +706,12 @@ function renderCcd() {
 }
 
 function ccdAddResponse() {
+  ccdSyncFromDOM();
   state.ccd.responses.push({id:uid(),name:'',unit:''});
   renderCcdResponses(); ccdRebuildTable();
 }
 function ccdRemoveResponse(id) {
+  ccdSyncFromDOM();
   state.ccd.responses=state.ccd.responses.filter(r=>r.id!==id);
   renderCcdResponses(); ccdRebuildTable();
 }
@@ -660,10 +720,10 @@ function renderCcdFactors() {
   const el=document.getElementById('ccd-factors-list');
   el.innerHTML=state.ccd.factors.map((f,i)=>`
   <div class="var-row-5" data-id="${f.id}">
-    <input type="text" placeholder="ex: Temperatura" value="${esc(f.name)}" aria-label="Nome fator ${i+1}" />
-    <input type="text" class="unit-input" placeholder="ex: °C" value="${esc(f.unit)}" aria-label="Unidade ${i+1}" />
-    <input type="text" class="level-input" placeholder="ex: 60" value="${esc(f.lo)}" aria-label="Nível baixo ${i+1}" />
-    <input type="text" class="level-input" placeholder="ex: 80" value="${esc(f.hi)}" aria-label="Nível alto ${i+1}" />
+    <input type="text" placeholder="ex: Temperatura" value="${esc(f.name)}" aria-label="Nome fator ${i+1}" oninput="ccdSyncFromDOM();ccdRebuildTable()" />
+    <input type="text" class="unit-input" placeholder="ex: °C" value="${esc(f.unit)}" aria-label="Unidade ${i+1}" oninput="ccdSyncFromDOM();ccdRebuildTable()" />
+    <input type="text" class="level-input" placeholder="ex: 60" value="${esc(f.lo)}" aria-label="Nível baixo ${i+1}" oninput="ccdSyncFromDOM();ccdRebuildTable()" />
+    <input type="text" class="level-input" placeholder="ex: 80" value="${esc(f.hi)}" aria-label="Nível alto ${i+1}" oninput="ccdSyncFromDOM();ccdRebuildTable()" />
     <span style="color:var(--text-muted);font-size:11px;text-align:center">F${i+1}</span>
   </div>`).join('');
 }
@@ -686,16 +746,20 @@ function ccdSyncFromDOM() {
     const f=state.ccd.factors.find(x=>x.id===parseInt(row.dataset.id,10));
     if(!f) return;
     const ins=row.querySelectorAll('input');
-    f.name=ins[0]?.value??f.name; f.unit=ins[1]?.value??f.unit;
-    f.lo=ins[2]?.value??f.lo; f.hi=ins[3]?.value??f.hi;
+    if(ins[0]) f.name=ins[0].value;
+    if(ins[1]) f.unit=ins[1].value;
+    if(ins[2]) f.lo=ins[2].value;
+    if(ins[3]) f.hi=ins[3].value;
   });
   document.querySelectorAll('#ccd-responses-list .var-row').forEach(row=>{
     const r=state.ccd.responses.find(x=>x.id===parseInt(row.dataset.id,10));
     if(!r) return;
     const ins=row.querySelectorAll('input');
-    r.name=ins[0]?.value??r.name; r.unit=ins[1]?.value??r.unit;
+    if(ins[0]) r.name=ins[0].value;
+    if(ins[1]) r.unit=ins[1].value;
   });
-  state.ccd.centerPts=parseInt(document.getElementById('ccd-center-pts')?.value||'3',10);
+  const cpEl=document.getElementById('ccd-center-pts');
+  if(cpEl) state.ccd.centerPts=parseInt(cpEl.value||'3',10);
 }
 
 // Gera matriz CCD codificada
@@ -716,7 +780,7 @@ function ccdMatrix(k, nCenter) {
 }
 
 function ccdRebuildTable() {
-  ccdSyncFromDOM();
+  // NÃO sincroniza do DOM aqui
   const thead=document.getElementById('ccd-thead');
   const tbody=document.getElementById('ccd-tbody');
   if(!thead||!tbody) return;
@@ -770,6 +834,12 @@ function commitCcd() {
   const respVals=readCcdRespData();
   if(!respVals.some(v=>v.trim()!=='')) return 'Preencha ao menos uma célula de resposta.';
 
+  // Valida numéricos
+  for(const v of respVals){
+    if(v.trim()!==''&&!isNumericVal(v))
+      return `Valor inválido "${v}". Use ponto ou vírgula como decimal (ex: 12,5 ou 12.5). Não use separador de milhar.`;
+  }
+
   const factorHeaders=factors.map(f=>f.name.trim());
   const respHeaders=resps.map(r=>r.name.trim());
   state.headers=[...factorHeaders,...respHeaders];
@@ -779,7 +849,8 @@ function commitCcd() {
 
   state.rows=mat.map((pt,ri)=>{
     const row=pt.vals.map(v=>v.toFixed(4));
-    resps.forEach((_,rsi)=>{ row.push(respVals[ri*resps.length+rsi]??''); });
+    // BUG 14 fix: normaliza vírgula→ponto nas respostas
+    resps.forEach((_,rsi)=>{ row.push(normalizeNum(respVals[ri*resps.length+rsi]??'')); });
     return row;
   });
   return '';
@@ -790,6 +861,13 @@ function commitCcd() {
    ════════════════════════════════════════════════════════════ */
 function goTo(n) {
   document.getElementById('step2-alert').style.display='none';
+
+  if (n===2) {
+    renderStep(2);
+    // Re-renderiza painel manual ao voltar do step 3
+    if (state.inputMode==='manual') renderManualPanel();
+    return;
+  }
 
   if (n===3) {
     if (state.inputMode==='manual') {
@@ -1585,3 +1663,42 @@ function finish(){
 function fmt(v){ if(v==null||v==='') return '—'; return parseFloat(v).toFixed(3); }
 function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escAttr(s){ return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+/* ════════════════════════════════════════════════════════════
+   UTILITÁRIOS NUMÉRICOS
+   ════════════════════════════════════════════════════════════ */
+
+/**
+ * Normaliza valor numérico do usuário para ponto decimal:
+ *   "12,5"    → "12.5"      (vírgula decimal BR)
+ *   "1.234,5" → "1234.5"   (milhar ponto + decimal vírgula BR)
+ *   "12.5"    → "12.5"      (ponto decimal padrão)
+ *   "-1"      → "-1"        (valores codificados 2k/CCD)
+ */
+function normalizeNum(v) {
+  if (!v && v !== 0) return '';
+  let s = String(v).trim();
+  if (s === '') return '';
+  if (s.includes(',')) {
+    // padrão BR: remove ponto de milhar, troca vírgula por ponto
+    s = s.replace(/\./g, '').replace(',', '.');
+  }
+  return isNaN(parseFloat(s)) ? s : s;
+}
+
+/** True se o valor é numérico válido (aceita vírgula como decimal) */
+function isNumericVal(v) {
+  if (!v && v !== 0) return false;
+  const s = String(v).trim();
+  if (s === '') return false;
+  return !isNaN(parseFloat(normalizeNum(s)));
+}
+
+/**
+ * Normaliza um array de valores de uma linha de dados:
+ * os primeiros `nFixed` colunas são mantidos como texto (fatores codificados),
+ * o restante é normalizado como número.
+ */
+function normalizeRow(row, nFixed) {
+  return row.map((v, i) => i < nFixed ? v : normalizeNum(v));
+}

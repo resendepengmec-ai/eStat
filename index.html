@@ -153,7 +153,7 @@
               <div class="inline-field narrow">
                 <label>Número de réplicas</label>
                 <input type="number" id="a1-replicas" min="1" max="20" value="3"
-                  oninput="a1RebuildTable()" style="width:80px" />
+                  oninput="a1OnReplicaChange(this.value)" style="width:80px" />
               </div>
             </div>
             <div class="table-wrap">
@@ -163,6 +163,7 @@
               </table>
             </div>
             <p class="help" style="margin-top:6px">Preencha cada célula com o valor da resposta para o grupo e réplica correspondentes.</p>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>12,5</code>) e <strong>não</strong> use separador de milhar.</p>
           </div>
         </div>
 
@@ -194,7 +195,7 @@
               <div class="inline-field narrow">
                 <label>Número de réplicas por grupo</label>
                 <input type="number" id="a2-replicas" min="1" max="20" value="3"
-                  oninput="a2RebuildTable()" style="width:80px" />
+                  oninput="a2OnReplicaChange(this.value)" style="width:80px" />
               </div>
             </div>
             <div class="table-wrap">
@@ -203,6 +204,7 @@
                 <tbody id="a2-tbody"></tbody>
               </table>
             </div>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>12,5</code>) e <strong>não</strong> use separador de milhar.</p>
           </div>
         </div>
 
@@ -236,7 +238,7 @@
                 <div class="inline-field narrow" style="flex-direction:row;align-items:center;gap:6px">
                   <label style="white-space:nowrap;margin:0">Réplicas por ponto:</label>
                   <input type="number" id="fat2k-replicas" min="1" max="10" value="1"
-                    oninput="fat2kRebuildTable()" style="width:60px" />
+                    oninput="fat2kOnReplicaChange(this.value)" style="width:60px" />
                 </div>
               </div>
             </div>
@@ -249,6 +251,7 @@
             <p class="help" style="margin-top:6px">
               Colunas codificadas (−1/+1) preenchidas automaticamente. Preencha apenas as colunas de resposta (fundo verde).
             </p>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>85,4</code>) e <strong>não</strong> use separador de milhar.</p>
           </div>
         </div>
 
@@ -282,7 +285,7 @@
                 <div class="inline-field narrow" style="flex-direction:row;align-items:center;gap:6px">
                   <label style="white-space:nowrap;margin:0">Pontos centrais:</label>
                   <input type="number" id="ccd-center-pts" min="1" max="10" value="3"
-                    oninput="ccdRebuildTable()" style="width:60px" />
+                    oninput="ccdOnCenterPtsChange(this.value)" style="width:60px" />
                 </div>
               </div>
             </div>
@@ -295,6 +298,7 @@
             <p class="help" style="margin-top:6px">
               Pontos codificados preenchidos automaticamente (±1, ±α, 0). Preencha apenas as colunas de resposta (fundo verde).
             </p>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>78,3</code>) e <strong>não</strong> use separador de milhar.</p>
           </div>
         </div>
 

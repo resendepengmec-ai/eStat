@@ -945,3 +945,31 @@ body {
   text-align: center;
   min-width: 30px;
 }
+
+/* ── Decimal format notice ──────────────────────────────── */
+.decimal-notice {
+  margin-top: 6px !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 0.5px solid var(--warning-border);
+  border-radius: var(--radius);
+  font-size: 12px !important;
+  color: var(--warning-text) !important;
+}
+
+.decimal-notice code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: rgba(0,0,0,0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* also normalize the a2 replica block (no help text yet, add one) */
+#a2-replica-block .table-wrap + .decimal-notice {
+  margin-top: 8px;
+}
