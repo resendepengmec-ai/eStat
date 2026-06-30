@@ -870,6 +870,7 @@ function goTo(n) {
 
   if (n===2) {
     renderStep(2);
+    // Re-renderiza painel manual ao voltar do step 3
     if (state.inputMode==='manual') renderManualPanel();
     return;
   }
@@ -995,11 +996,6 @@ async function runAnalysis(){
 
   const inputs=activeInputs(); const outputs=activeOutputs();
   const label=TYPE_LABEL[state.type]+((state.type==='fat2k'||state.type==='ccd')?` (k=${state.k})`:'');
-
-  // Mostra aviso do proxy apenas em localhost
-  const isLocal = location.hostname==='localhost' || location.hostname==='127.0.0.1';
-  const reminder = document.getElementById('proxy-reminder');
-  if (reminder) reminder.style.display = isLocal ? '' : 'none';
   logProc(`> Tipo: ${label}`);
   logProc(`> Modo: ${state.inputMode==='manual'?'entrada manual':'CSV'}`);
   logProc(`> Entradas (${inputs.length}): ${inputs.join(', ')}`);

@@ -1,0 +1,24 @@
+# Segredos — NUNCA versionar
+.env
+.env.local
+*.key
+secrets.js
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Arquivos de backup gerados durante desenvolvimento
+*.bak
