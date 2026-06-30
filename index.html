@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Análise Estatística de Experimentos</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <h1><i class="ti ti-flask" aria-hidden="true"></i> Análise estatística de experimentos</h1>
+    <p>Escolha o tipo, configure as variáveis e insira os dados para gerar o relatório</p>
+  </header>
+
+  <nav class="step-bar" aria-label="Etapas">
+    <div class="step active" id="step1-ind" aria-current="step"><div class="dot">1</div><span>Tipo</span></div>
+    <div class="step" id="step2-ind"><div class="dot">2</div><span>Dados</span></div>
+    <div class="step" id="step3-ind"><div class="dot">3</div><span>Revisar</span></div>
+    <div class="step" id="step4-ind"><div class="dot">4</div><span>Processar</span></div>
+    <div class="step" id="step5-ind"><div class="dot">5</div><span>Relatório</span></div>
+  </nav>
+
+  <main class="body">
+
+    <!-- ══════════════════════════════════════════════════════
+         STEP 1 — TIPO
+         ══════════════════════════════════════════════════════ -->
+    <section class="section visible" id="sec1" aria-label="Tipo de experimento">
+
+      <div class="field">
+        <span class="label">Tipo de experimento</span>
+        <div class="type-grid">
+          <div class="type-card selected" data-type="anova1" tabindex="0" role="button" aria-pressed="true">
+            <div class="card-name"><i class="ti ti-chart-bar"></i> ANOVA univariado</div>
+            <div class="card-desc">Uma variável dependente, um ou mais tratamentos. Testa diferença entre médias de grupos.</div>
+          </div>
+          <div class="type-card" data-type="anova2" tabindex="0" role="button" aria-pressed="false">
+            <div class="card-name"><i class="ti ti-chart-dots-3"></i> ANOVA multivariado</div>
+            <div class="card-desc">Múltiplas variáveis dependentes simultaneamente (MANOVA).</div>
+          </div>
+          <div class="type-card" data-type="fat2k" tabindex="0" role="button" aria-pressed="false">
+            <div class="card-name"><i class="ti ti-grid-dots"></i> Planejamento 2<sup>k</sup></div>
+            <div class="card-desc">Fatorial completo com k fatores em 2 níveis. Gera tabela de Yates automaticamente.</div>
+          </div>
+          <div class="type-card" data-type="ccd" tabindex="0" role="button" aria-pressed="false">
+            <div class="card-name"><i class="ti ti-focus-2"></i> Composto central (CCD)</div>
+            <div class="card-desc">Superfície de resposta com pontos fatoriais, axiais e centrais.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" id="k-field" style="display:none">
+        <span class="label">Número de fatores k</span>
+        <div class="k-selector">
+          <button class="k-btn selected" data-k="2">k = 2</button>
+          <button class="k-btn" data-k="3">k = 3</button>
+          <button class="k-btn" data-k="4">k = 4</button>
+          <button class="k-btn" data-k="5">k = 5</button>
+          <button class="k-btn" data-k="6">k = 6</button>
+        </div>
+      </div>
+
+      <div class="alert info" style="align-items:center">
+        <i class="ti ti-info-circle" style="flex-shrink:0"></i>
+        <span id="type-info-text">ANOVA univariado: compara médias de grupos. Informe tratamentos, réplicas e respostas.</span>
+        <a id="help-link" href="help.html?page=anova1" target="_blank"
+           style="flex-shrink:0;margin-left:auto;display:inline-flex;align-items:center;gap:5px;
+                  padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;
+                  background:var(--accent);color:#fff;text-decoration:none;white-space:nowrap;transition:opacity .12s"
+           onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <i class="ti ti-book-2" style="font-size:13px"></i> Saiba mais
+        </a>
+      </div>
+
+      <div class="footer-btns">
+        <button class="btn primary ml-auto" onclick="goTo(2)">
+          Próximo <i class="ti ti-arrow-right"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         STEP 2 — DADOS
+         ══════════════════════════════════════════════════════ -->
+    <section class="section" id="sec2" aria-label="Entrada de dados">
+
+      <!-- Tabs upload / manual -->
+      <div class="input-mode-tabs">
+        <button class="mode-tab active" id="tab-upload" onclick="switchMode('upload')">
+          <i class="ti ti-file-type-csv"></i> Upload de CSV
+        </button>
+        <button class="mode-tab" id="tab-manual" onclick="switchMode('manual')">
+          <i class="ti ti-keyboard"></i> Entrada manual
+        </button>
+      </div>
+
+      <!-- ── Painel: upload ─────────────────────────────── -->
+      <div id="panel-upload" style="margin-top:1rem">
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept=".csv" aria-label="Selecionar CSV" />
+          <div class="upload-icon"><i class="ti ti-file-type-csv"></i></div>
+          <p>Arraste o CSV aqui ou clique para selecionar</p>
+          <span>Primeira linha = nomes das colunas</span>
+        </div>
+        <div class="file-badge" id="file-name-display" style="display:none">
+          <i class="ti ti-check"></i>
+          <span id="file-name-text"></span>
+          <span id="file-rows-text" class="rows-count"></span>
+        </div>
+        <div id="preview-area" style="display:none;margin-top:1rem">
+          <span class="label">Pré-visualização (5 primeiras linhas)</span>
+          <div class="table-wrap" id="preview-wrap"></div>
+        </div>
+      </div>
+
+      <!-- ── Painel: manual ─────────────────────────────── -->
+      <div id="panel-manual" style="display:none;margin-top:1rem">
+
+        <!-- ▸ ANOVA univariado manual -->
+        <div id="manual-anova1" style="display:none">
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-layers-subtract"></i> Variável resposta
+            </div>
+            <div class="inline-fields">
+              <div class="inline-field">
+                <label>Nome</label>
+                <input type="text" id="a1-resp-name" placeholder="ex: Resistência" />
+              </div>
+              <div class="inline-field narrow">
+                <label>Unidade</label>
+                <input type="text" id="a1-resp-unit" placeholder="ex: MPa" class="unit-input" />
+              </div>
+            </div>
+          </div>
+
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-list"></i> Tratamentos / grupos
+              <button class="btn-icon" onclick="a1AddGroup()">
+                <i class="ti ti-plus"></i> Adicionar grupo
+              </button>
+            </div>
+            <div id="a1-groups-list"></div>
+          </div>
+
+          <div class="manual-block" id="a1-replica-block" style="display:none">
+            <div class="manual-block-title"><i class="ti ti-table"></i> Dados por réplica</div>
+            <div class="inline-fields" style="margin-bottom:10px">
+              <div class="inline-field narrow">
+                <label>Número de réplicas</label>
+                <input type="number" id="a1-replicas" min="1" max="20" value="3"
+                  oninput="a1OnReplicaChange(this.value)" style="width:80px" />
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table editable-table" id="a1-data-table">
+                <thead id="a1-thead"></thead>
+                <tbody id="a1-tbody"></tbody>
+              </table>
+            </div>
+            <p class="help" style="margin-top:6px">Preencha cada célula com o valor da resposta para o grupo e réplica correspondentes.</p>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>12,5</code>) e <strong>não</strong> use separador de milhar.</p>
+          </div>
+        </div>
+
+        <!-- ▸ ANOVA multivariado manual -->
+        <div id="manual-anova2" style="display:none">
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-list"></i> Grupos / tratamentos
+              <button class="btn-icon" onclick="a2AddGroup()">
+                <i class="ti ti-plus"></i> Adicionar grupo
+              </button>
+            </div>
+            <div id="a2-groups-list"></div>
+          </div>
+
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-layers-subtract"></i> Variáveis de resposta
+              <button class="btn-icon" onclick="a2AddResponse()">
+                <i class="ti ti-plus"></i> Adicionar resposta
+              </button>
+            </div>
+            <div id="a2-responses-list"></div>
+          </div>
+
+          <div class="manual-block" id="a2-replica-block" style="display:none">
+            <div class="manual-block-title"><i class="ti ti-table"></i> Dados por réplica</div>
+            <div class="inline-fields" style="margin-bottom:10px">
+              <div class="inline-field narrow">
+                <label>Número de réplicas por grupo</label>
+                <input type="number" id="a2-replicas" min="1" max="20" value="3"
+                  oninput="a2OnReplicaChange(this.value)" style="width:80px" />
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table editable-table" id="a2-data-table">
+                <thead id="a2-thead"></thead>
+                <tbody id="a2-tbody"></tbody>
+              </table>
+            </div>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>12,5</code>) e <strong>não</strong> use separador de milhar.</p>
+          </div>
+        </div>
+
+        <!-- ▸ Planejamento 2k manual -->
+        <div id="manual-fat2k" style="display:none">
+
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-variable"></i> Fatores (<span id="fat2k-k-label">k = 2</span>)
+            </div>
+            <div class="var-row-labels" style="grid-template-columns:1fr 90px 110px 110px 32px">
+              <span>Nome</span><span>Unidade</span><span>Nível baixo (−1)</span><span>Nível alto (+1)</span><span></span>
+            </div>
+            <div id="fat2k-factors-list"></div>
+          </div>
+
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-layers-subtract"></i> Variáveis de resposta
+              <button class="btn-icon" onclick="fat2kAddResponse()">
+                <i class="ti ti-plus"></i> Adicionar resposta
+              </button>
+            </div>
+            <div id="fat2k-responses-list"></div>
+          </div>
+
+          <div class="manual-block" id="fat2k-table-block">
+            <div class="manual-block-title">
+              <i class="ti ti-table"></i> Tabela de Yates
+              <div class="inline-fields" style="margin:0;gap:8px">
+                <div class="inline-field narrow" style="flex-direction:row;align-items:center;gap:6px">
+                  <label style="white-space:nowrap;margin:0">Réplicas por ponto:</label>
+                  <input type="number" id="fat2k-replicas" min="1" max="10" value="1"
+                    oninput="fat2kOnReplicaChange(this.value)" style="width:60px" />
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap" style="overflow-x:auto">
+              <table class="data-table editable-table yates-table" id="fat2k-table">
+                <thead id="fat2k-thead"></thead>
+                <tbody id="fat2k-tbody"></tbody>
+              </table>
+            </div>
+            <p class="help" style="margin-top:6px">
+              Colunas codificadas (−1/+1) preenchidas automaticamente. Preencha apenas as colunas de resposta (fundo verde).
+            </p>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>85,4</code>) e <strong>não</strong> use separador de milhar.</p>
+          </div>
+        </div>
+
+        <!-- ▸ CCD manual -->
+        <div id="manual-ccd" style="display:none">
+
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-variable"></i> Fatores (<span id="ccd-k-label">k = 2</span>)
+            </div>
+            <div class="var-row-labels" style="grid-template-columns:1fr 90px 110px 110px 32px">
+              <span>Nome</span><span>Unidade</span><span>Nível baixo (−1)</span><span>Nível alto (+1)</span><span></span>
+            </div>
+            <div id="ccd-factors-list"></div>
+          </div>
+
+          <div class="manual-block">
+            <div class="manual-block-title">
+              <i class="ti ti-layers-subtract"></i> Variáveis de resposta
+              <button class="btn-icon" onclick="ccdAddResponse()">
+                <i class="ti ti-plus"></i> Adicionar resposta
+              </button>
+            </div>
+            <div id="ccd-responses-list"></div>
+          </div>
+
+          <div class="manual-block" id="ccd-table-block">
+            <div class="manual-block-title">
+              <i class="ti ti-table"></i> Tabela CCD
+              <div class="inline-fields" style="margin:0;gap:8px">
+                <div class="inline-field narrow" style="flex-direction:row;align-items:center;gap:6px">
+                  <label style="white-space:nowrap;margin:0">Pontos centrais:</label>
+                  <input type="number" id="ccd-center-pts" min="1" max="10" value="3"
+                    oninput="ccdOnCenterPtsChange(this.value)" style="width:60px" />
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap" style="overflow-x:auto">
+              <table class="data-table editable-table yates-table" id="ccd-table">
+                <thead id="ccd-thead"></thead>
+                <tbody id="ccd-tbody"></tbody>
+              </table>
+            </div>
+            <p class="help" style="margin-top:6px">
+              Pontos codificados preenchidos automaticamente (±1, ±α, 0). Preencha apenas as colunas de resposta (fundo verde).
+            </p>
+            <p class="help decimal-notice"><i class="ti ti-info-circle"></i> Use <strong>vírgula</strong> como separador decimal (ex: <code>78,3</code>) e <strong>não</strong> use separador de milhar.</p>
+          </div>
+        </div>
+
+      </div><!-- /panel-manual -->
+
+      <!-- alerta do step 2 -->
+      <div id="step2-alert" class="alert warn" style="display:none;margin-top:1rem">
+        <i class="ti ti-alert-triangle"></i>
+        <span id="step2-alert-text"></span>
+      </div>
+
+      <div class="footer-btns" style="margin-top:1.25rem">
+        <button class="btn" onclick="goTo(1)"><i class="ti ti-arrow-left"></i> Voltar</button>
+        <button class="btn primary ml-auto" id="btn-to-3" disabled onclick="goTo(3)">
+          Próximo <i class="ti ti-arrow-right"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         STEP 3 — REVISAR
+         ══════════════════════════════════════════════════════ -->
+    <section class="section" id="sec3" aria-label="Revisar variáveis">
+
+      <div class="alert info">
+        <i class="ti ti-info-circle"></i>
+        Confirme a classificação: <strong>Entrada</strong> (fator/grupo) ou <strong>Saída</strong> (resposta).
+      </div>
+
+      <div class="field">
+        <span class="label">Colunas detectadas</span>
+        <div class="col-config" id="col-config"></div>
+      </div>
+
+      <div id="units-review" style="display:none;margin-bottom:1rem">
+        <span class="label">Variáveis e unidades</span>
+        <div class="units-grid" id="units-grid"></div>
+      </div>
+
+      <div id="var-warning" class="alert warn" style="display:none">
+        <i class="ti ti-alert-triangle"></i>
+        <span id="var-warn-text"></span>
+      </div>
+
+      <div class="footer-btns">
+        <button class="btn" onclick="goTo(2)"><i class="ti ti-arrow-left"></i> Voltar</button>
+        <button class="btn primary ml-auto" onclick="goTo(4)">
+          Processar <i class="ti ti-player-play"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         STEP 4 — PROCESSAR
+         ══════════════════════════════════════════════════════ -->
+    <section class="section" id="sec4" aria-label="Processando análise">
+      <div class="alert info" id="proxy-reminder" style="display:none;margin-bottom:1rem;align-items:flex-start">
+        <i class="ti ti-server" style="flex-shrink:0;margin-top:2px"></i>
+        <span style="font-size:12.5px;line-height:1.6">
+          A análise requer o <strong>proxy local</strong> em execução.<br>
+          Caso ainda não iniciou: abra um terminal na pasta do projeto e execute
+          <code style="font-family:var(--font-mono);font-size:11px;background:rgba(0,0,0,0.09);padding:1px 6px;border-radius:4px;white-space:nowrap">node proxy.js</code>
+          — depois acesse <strong>http://localhost:3001</strong> (não abra o index.html diretamente).
+        </span>
+      </div>
+      <div class="processing">
+        <div class="spinner" id="spinner"></div>
+        <p id="proc-msg">Enviando dados para análise...</p>
+        <div class="proc-log" id="proc-log" role="log" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         STEP 5 — RELATÓRIO
+         ══════════════════════════════════════════════════════ -->
+    <section class="section" id="sec5" aria-label="Relatório de resultados">
+      <div id="result-container"></div>
+      <div class="footer-btns result-footer">
+        <button class="btn danger" onclick="restart()">
+          <i class="ti ti-refresh"></i> Reiniciar
+        </button>
+        <button class="btn" onclick="exportReport()">
+          <i class="ti ti-download"></i> Exportar relatório
+        </button>
+        <button class="btn primary" onclick="finish()">
+          <i class="ti ti-check"></i> Finalizar
+        </button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
