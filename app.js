@@ -3,9 +3,15 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-// Frontend chama o proxy local (evita CORS do navegador).
-// Inicie com: node proxy.js  (requer ANTHROPIC_API_KEY no ambiente)
-const API_URL   = 'http://localhost:3001/api/analyze';
+// Detecta ambiente automaticamente:
+//   - localhost / 127.0.0.1  → proxy local (node proxy.js)
+//   - qualquer outro host     → server.js na nuvem (mesma origem)
+const API_URL = (
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1'
+) ? 'http://localhost:3001/api/analyze'
+  : '/api/analyze';   // mesma origem em produção (Cloud Run, Render etc.)
+
 const API_MODEL = 'claude-sonnet-4-6';
 
 /* ── Estado global ─────────────────────────────────────────── */
@@ -1019,13 +1025,15 @@ async function runAnalysis(){
         body:JSON.stringify({model:API_MODEL,max_tokens:maxTokens,messages:[{role:'user',content:prompt}]}),
       });
     } catch(fetchErr) {
-      // Failed to fetch = proxy não está respondendo
-      throw new Error(
-        'Não foi possível conectar ao proxy local (http://localhost:3001).\n' +
-        'Verifique se o proxy está rodando:\n' +
-        '  1. Abra um terminal na pasta do projeto\n' +
-        '  2. Execute:  node proxy.js\n' +
-        '  3. Acesse:   http://localhost:3001  (não abra o index.html diretamente)'
+      const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      throw new Error(isLocal
+        ? 'Não foi possível conectar ao proxy local (http://localhost:3001).\n' +
+          'Verifique se o proxy está rodando:\n' +
+          '  1. Abra um terminal na pasta do projeto\n' +
+          '  2. Execute:  node proxy.js\n' +
+          '  3. Acesse:   http://localhost:3001  (não abra o index.html diretamente)'
+        : 'Erro de conexão com o servidor.\n' +
+          'Verifique se o serviço está ativo no painel do provedor de nuvem.'
       );
     }
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); throw new Error(`HTTP ${resp.status}: ${e?.error?.message||resp.statusText}`); }

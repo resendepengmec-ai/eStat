@@ -1,4 +1,14 @@
-# Sistema operacional
+# Segredos — NUNCA versionar
+.env
+.env.local
+*.key
+secrets.js
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Sistema
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -10,14 +20,5 @@ desktop.ini
 *.swo
 *~
 
-# Segredos — NUNCA versionar chaves de API
-.env
-.env.local
-.env.*.local
-*.key
-secrets.js
-
-# Node (se adicionar build tools futuramente)
-node_modules/
-dist/
-.cache/
+# Arquivos de backup gerados durante desenvolvimento
+*.bak

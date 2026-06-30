@@ -1,0 +1,15 @@
+{
+  "name": "analise-experimentos",
+  "version": "1.0.0",
+  "description": "Análise estatística de experimentos — ANOVA, 2k, CCD",
+  "main": "server.js",
+  "scripts": {
+    "start":   "node server.js",
+    "dev":     "node proxy.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["estatistica", "anova", "doe", "experimentos"],
+  "license": "MIT"
+}
