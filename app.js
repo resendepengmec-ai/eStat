@@ -1013,10 +1013,10 @@ async function runAnalysis(){
   // max_tokens: cresce com k e número de saídas
   const nOutputs = outputs.length;
   const maxTokens = Math.min(8000,
-    (state.type==='ccd'                          ? 6000 :
-     state.type==='fat2k' && state.k>=4          ? 6000 :
-     state.type==='fat2k'                        ? 5000 :
-     state.type==='anova2'                       ? 5000 : 4000)
+    (state.type==='ccd'                          ? 7000 :
+     state.type==='fat2k' && state.k>=4          ? 7000 :
+     state.type==='fat2k'                        ? 6000 :
+     state.type==='anova2'                       ? 6000 : 5000)
     + (nOutputs > 1 ? (nOutputs-1) * 500 : 0)
   );
 
@@ -1047,8 +1047,16 @@ async function runAnalysis(){
     if (proxyReminder) proxyReminder.style.display = 'none';
     const raw=(data.content||[]).map(i=>i.text||'').join('');
     logProc('> Resposta recebida. Processando...');
+    // Log se a resposta parece truncada
+    if (data.stop_reason === 'max_tokens') {
+      logProc('> AVISO: resposta truncada (max_tokens atingido). Tentando recuperar JSON parcial...');
+    }
     const parsed=extractJSON(raw);
-    if(!parsed) throw new Error('JSON inválido na resposta. Tente novamente.');
+    if(!parsed) {
+      // Loga os últimos 200 chars para diagnóstico
+      logProc(`> Trecho final da resposta: ...${raw.slice(-200)}`);
+      throw new Error('JSON inválido na resposta. Tente novamente.');
+    }
     state.result=parsed; state.reportText=buildReportText(parsed,label,inputs,outputs);
     logProc('> Concluído!');
     document.getElementById('proc-msg').textContent='Concluído!';
