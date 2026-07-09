@@ -1012,13 +1012,7 @@ async function runAnalysis(){
   const prompt=buildPrompt(csvSubset,inputs,outputs,label);
   // max_tokens: cresce com k e número de saídas
   const nOutputs = outputs.length;
-  const maxTokens = Math.min(8000,
-    (state.type==='ccd'                          ? 7000 :
-     state.type==='fat2k' && state.k>=4          ? 7000 :
-     state.type==='fat2k'                        ? 6000 :
-     state.type==='anova2'                       ? 6000 : 5000)
-    + (nOutputs > 1 ? (nOutputs-1) * 500 : 0)
-  );
+  const maxTokens = 8000;
 
   try{
     let resp;
@@ -1338,8 +1332,9 @@ anova1: `{
   "tukey": [{"comparacao":"A vs B","diferenca":0.0,"hsd":0.0,"significativo":true}],
   "r2": 0.0, "r2_ajustado": 0.0,
   "conclusao": "Grupos que diferem, magnitude, direção, recomendações com nomes e unidades reais",
-  "dados_graficos": {"medias_por_grupo":[{"grupo":"","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],"residuos":[0.0],"valores_ajustados":[0.0],"efeitos_principais":[]}
-}`,
+  "dados_graficos": {"medias_por_grupo":[{"grupo":"","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],"residuos":[0.0,0.0,0.0,0.0,0.0],"valores_ajustados":[0.0,0.0,0.0,0.0,0.0],"efeitos_principais":[]}
+}
+ATENÇÃO: nos arrays "residuos" e "valores_ajustados" inclua NO MÁXIMO 8 valores representativos — NÃO liste todos os N valores individualmente.`,
 anova2: `{
   "resumo": "2-3 parágrafos: análise multivariada e por resposta",
   "criterios_multivariados": {"wilks_lambda":0.0,"wilks_F":0.0,"wilks_p":0.0,"pillai_trace":0.0,"pillai_F":0.0,"pillai_p":0.0,"hotelling_trace":0.0,"significativo":true},
@@ -1348,7 +1343,7 @@ anova2: `{
   "efeitos": [{"nome":"","estimativa":0.0,"erro_padrao":0.0,"t":0.0,"p_valor":0.0}],
   "r2": 0.0, "r2_ajustado": 0.0,
   "conclusao": "Interpretação multivariada + por resposta com unidades reais",
-  "dados_graficos": {"medias_por_grupo":[{"grupo":"","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],"residuos":[0.0],"valores_ajustados":[0.0],"efeitos_principais":[]}
+  "dados_graficos": {"medias_por_grupo":[{"grupo":"","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],"residuos":[0.0,0.0,0.0,0.0,0.0],"valores_ajustados":[0.0,0.0,0.0,0.0,0.0],"efeitos_principais":[]}
 }`,
 fat2k: `{
   "resumo": "2-3 parágrafos: efeitos significativos, magnitudes, interações, interpretação real",
@@ -1360,7 +1355,7 @@ fat2k: `{
   "conclusao": "Fatores/interações significativos, sentido do efeito nos níveis reais, configuração ótima sugerida",
   "dados_graficos": {
     "medias_por_grupo":[{"grupo":"","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],
-    "residuos":[0.0],"valores_ajustados":[0.0],
+    "residuos":[0.0,0.0,0.0,0.0,0.0],"valores_ajustados":[0.0,0.0,0.0,0.0,0.0],
     "efeitos_principais":[{"fator":"","nivel_baixo":0.0,"nivel_alto":0.0}],
     "pareto_efeitos":[{"nome":"","valor_absoluto":0.0,"significativo":true}]
   }
@@ -1380,7 +1375,7 @@ ccd: `{
   "ponto_otimo": {"coordenadas_codificadas":{},"coordenadas_reais":{},"resposta_predita":0.0,"tipo":"máximo","autovalores_B":[]},
   "r2": 0.0, "r2_ajustado": 0.0, "r2_predicao": 0.0,
   "conclusao": "Adequação do modelo (LoF), termos significativos, ponto ótimo nas unidades reais, recomendações",
-  "dados_graficos": {"medias_por_grupo":[],"residuos":[0.0],"valores_ajustados":[0.0],"efeitos_principais":[{"fator":"","nivel_baixo":0.0,"nivel_alto":0.0}]}
+  "dados_graficos": {"medias_por_grupo":[],"residuos":[0.0,0.0,0.0,0.0,0.0],"valores_ajustados":[0.0,0.0,0.0,0.0,0.0],"efeitos_principais":[{"fator":"","nivel_baixo":0.0,"nivel_alto":0.0}]}
 }`,
   }[state.type] || `{"resumo":"","estatisticas_descritivas":{"por_variavel":[]},"tabela_anova":[],"efeitos":[],"r2":0.0,"r2_ajustado":0.0,"conclusao":"","dados_graficos":{"medias_por_grupo":[],"residuos":[],"valores_ajustados":[],"efeitos_principais":[]}}`;
 
@@ -1402,7 +1397,8 @@ MÉTODO ESTATÍSTICO — SIGA RIGOROSAMENTE:
 ${guide}
 
 Retorne SOMENTE o JSON abaixo, sem texto antes ou depois, sem markdown, sem comentários.
-Substitua todos os 0.0 pelos valores reais calculados:
+Substitua todos os 0.0 pelos valores reais calculados.
+REGRA CRÍTICA: nos arrays "residuos" e "valores_ajustados", inclua NO MÁXIMO 8 valores — nunca liste todos os N valores da amostra.
 ${jsonTemplate}`;
 }
 
