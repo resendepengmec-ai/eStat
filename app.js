@@ -980,6 +980,66 @@ function activeInputs()  { return state.headers.filter(h=>state.colRoles[h]==='e
 function activeOutputs() { return state.headers.filter(h=>state.colRoles[h]==='saida'); }
 
 /* ════════════════════════════════════════════════════════════
+   PRÉ-CÁLCULO 2k (JavaScript puro — garante precisão numérica)
+   ════════════════════════════════════════════════════════════ */
+function computeFat2k(inputs, outputs) {
+  const k=inputs.length, nRuns=Math.pow(2,k), N=state.rows.length, n=N/nRuns;
+  const respIdx=state.headers.indexOf(outputs[0]);
+  const inpIdxs=inputs.map(f=>state.headers.indexOf(f));
+
+  function sign(r,fi){ return Math.floor(r/Math.pow(2,fi))%2===0?-1:1; }
+  function runIndex(row){
+    let idx=0;
+    for(let fi=0;fi<k;fi++){ if(parseFloat(row[inpIdxs[fi]])>0) idx+=Math.pow(2,fi); }
+    return idx;
+  }
+  function effectName(mask){
+    let nm='';
+    for(let fi=0;fi<k;fi++) if(mask&(1<<fi)) nm+=inputs[fi];
+    return nm;
+  }
+
+  // Médias por corrida
+  const runSums=new Array(nRuns).fill(0), runCounts=new Array(nRuns).fill(0);
+  state.rows.forEach(row=>{ const r=runIndex(row); runSums[r]+=parseFloat(row[respIdx]); runCounts[r]++; });
+  const runMeans=runSums.map((s,r)=>runCounts[r]>0?s/runCounts[r]:0);
+  const grandMean=runMeans.reduce((s,v)=>s+v,0)/nRuns;
+
+  // Efeitos e SQ por contraste de Yates
+  const effects=[];
+  for(let mask=1;mask<Math.pow(2,k);mask++){
+    let contraste=0;
+    for(let r=0;r<nRuns;r++){
+      let sinal=1;
+      for(let fi=0;fi<k;fi++) if(mask&(1<<fi)) sinal*=sign(r,fi);
+      contraste+=sinal*runMeans[r];
+    }
+    const efeito=contraste/(nRuns/2);
+    const SQ=(contraste**2*n)/nRuns;
+    effects.push({name:effectName(mask),efeito,SQ});
+  }
+
+  // Erro puro
+  let SQE=0;
+  if(n>1) state.rows.forEach(row=>{ const r=runIndex(row); SQE+=(parseFloat(row[respIdx])-runMeans[r])**2; });
+  const glE=nRuns*(n-1);
+  const QME=glE>0?SQE/glE:null;
+  const SQT=effects.reduce((s,e)=>s+e.SQ,0)+SQE;
+
+  // Monta texto para o prompt
+  let txt=`\n=== VALORES PRÉ-CALCULADOS — USE EXATAMENTE ESTES ===\n`;
+  txt+=`Média geral: ${grandMean.toFixed(4)}\n`;
+  txt+=`N=${N}, corridas=${nRuns}, réplicas/ponto=${n}\n\n`;
+  txt+=`Efeito | Estimativa | SQ | GL\n`;
+  effects.forEach(e=>{ txt+=`${e.name} | ${e.efeito.toFixed(4)} | ${e.SQ.toFixed(4)} | 1\n`; });
+  txt+=`Erro Puro | — | ${SQE.toFixed(4)} | ${glE}\n`;
+  txt+=`Total | — | ${SQT.toFixed(4)} | ${N-1}\n`;
+  if(QME){ txt+=`QME=${QME.toFixed(4)}\n`; effects.forEach(e=>{ txt+=`F(${e.name})=${(e.SQ/QME).toFixed(4)}\n`; }); }
+  txt+=`=== FIM DOS PRÉ-CÁLCULOS — NÃO RECALCULE ===\n`;
+  return txt;
+}
+
+/* ════════════════════════════════════════════════════════════
    STEP 4 — ANÁLISE
    ════════════════════════════════════════════════════════════ */
 function logProc(msg){
@@ -1005,12 +1065,23 @@ async function runAnalysis(){
   logProc(`> Entradas (${inputs.length}): ${inputs.join(', ')}`);
   logProc(`> Saídas (${outputs.length}): ${outputs.join(', ')}`);
   logProc(`> Linhas: ${state.rows.length}`);
+
+  // ── Pré-calcula 2k no JavaScript (garante precisão) ──────
+  let preCalc2k = '';
+  if (state.type==='fat2k') {
+    try {
+      preCalc2k = computeFat2k(inputs, outputs);
+      logProc('> Cálculos 2k pré-computados localmente ✓');
+    } catch(e) {
+      logProc(`> Aviso: pré-cálculo falhou (${e.message}), usando API`);
+    }
+  }
+
   logProc('> Chamando API...');
   document.getElementById('proc-msg').textContent='Analisando com IA...';
 
   const csvSubset=buildSubsetCSV([...inputs,...outputs]);
-  const prompt=buildPrompt(csvSubset,inputs,outputs,label);
-  // max_tokens: cresce com k e número de saídas
+  const prompt=buildPrompt(csvSubset,inputs,outputs,label,preCalc2k);
   const nOutputs = outputs.length;
   const maxTokens = 8000;
 
@@ -1107,7 +1178,7 @@ function buildLevelsContext(){
   return lines.length?`\nNíveis reais dos fatores:\n${lines.join('\n')}`:'';
 }
 
-function buildPrompt(csv,inputs,outputs,label){
+function buildPrompt(csv,inputs,outputs,label,preCalc=''){
 
   // ── Número total de observações e réplicas ──────────────
   const N    = state.rows.length;
@@ -1214,7 +1285,7 @@ DADOS CSV:
 ${csv}
 ${buildUnitsContext()}
 ${buildLevelsContext()}
-
+${preCalc}
 CONFIGURAÇÃO:
 - Análise: ${label}
 - Entradas: ${inputs.join(', ')}
