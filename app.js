@@ -980,8 +980,54 @@ function activeInputs()  { return state.headers.filter(h=>state.colRoles[h]==='e
 function activeOutputs() { return state.headers.filter(h=>state.colRoles[h]==='saida'); }
 
 /* ════════════════════════════════════════════════════════════
-   PRÉ-CÁLCULO 2k (JavaScript puro — garante precisão numérica)
+   PRÉ-CÁLCULOS LOCAIS (JavaScript puro — garante precisão)
    ════════════════════════════════════════════════════════════ */
+
+// ── ANOVA Univariado ──────────────────────────────────────
+function computeAnova1(inputs, outputs) {
+  const groupIdx = state.headers.indexOf(inputs[0]);
+  const respIdx  = state.headers.indexOf(outputs[0]);
+
+  // Agrupa observações por tratamento
+  const grupos = {};
+  state.rows.forEach(row => {
+    const g = row[groupIdx];
+    if (!grupos[g]) grupos[g] = [];
+    grupos[g].push(parseFloat(row[respIdx]));
+  });
+
+  const groupNames = Object.keys(grupos);
+  const a = groupNames.length;
+  const N = state.rows.length;
+  const grand = state.rows.reduce((s,row) => s + parseFloat(row[respIdx]), 0) / N;
+
+  const means = {};
+  groupNames.forEach(g => { means[g] = grupos[g].reduce((s,v)=>s+v,0)/grupos[g].length; });
+
+  const SQTr = groupNames.reduce((s,g) => s + grupos[g].length * (means[g]-grand)**2, 0);
+  const SQE  = groupNames.reduce((s,g) => s + grupos[g].reduce((ss,v)=>ss+(v-means[g])**2,0), 0);
+  const SQT  = SQTr + SQE;
+  const QMTr = SQTr / (a-1);
+  const QME  = SQE  / (N-a);
+  const F    = QME > 0 ? QMTr / QME : null;
+  const R2   = SQT > 0 ? SQTr / SQT : 0;
+
+  // Efeitos τ_i = ȳ_i - ȳ..
+  let txt = `\n=== VALORES PRÉ-CALCULADOS — USE EXATAMENTE ESTES ===\n`;
+  txt += `N=${N}, grupos=${a}, média geral=${grand.toFixed(4)}\n\n`;
+  txt += `Médias por grupo:\n`;
+  groupNames.forEach(g => { txt += `  ${g}: ȳ=${means[g].toFixed(4)}, n=${grupos[g].length}, τ=${(means[g]-grand).toFixed(4)}\n`; });
+  txt += `\nTabela ANOVA:\n`;
+  txt += `  Tratamentos: SQ=${SQTr.toFixed(4)}, GL=${a-1}, QM=${QMTr.toFixed(4)}, F=${F?F.toFixed(4):'—'}\n`;
+  txt += `  Erro:        SQ=${SQE.toFixed(4)}, GL=${N-a}, QME=${QME.toFixed(4)}\n`;
+  txt += `  Total:       SQ=${SQT.toFixed(4)}, GL=${N-1}\n`;
+  txt += `R² = ${(R2*100).toFixed(2)}%\n`;
+  txt += `\nTukey HSD: calcule usando q(α=0.05, a=${a}, ν=${N-a}) e QME=${QME.toFixed(4)}\n`;
+  txt += `=== FIM DOS PRÉ-CÁLCULOS — NÃO RECALCULE ===\n`;
+  return txt;
+}
+
+// ── 2k Fatorial ───────────────────────────────────────────
 function computeFat2k(inputs, outputs) {
   const k=inputs.length, nRuns=Math.pow(2,k), N=state.rows.length, n=N/nRuns;
   const respIdx=state.headers.indexOf(outputs[0]);
@@ -999,13 +1045,11 @@ function computeFat2k(inputs, outputs) {
     return nm;
   }
 
-  // Médias por corrida
   const runSums=new Array(nRuns).fill(0), runCounts=new Array(nRuns).fill(0);
   state.rows.forEach(row=>{ const r=runIndex(row); runSums[r]+=parseFloat(row[respIdx]); runCounts[r]++; });
   const runMeans=runSums.map((s,r)=>runCounts[r]>0?s/runCounts[r]:0);
   const grandMean=runMeans.reduce((s,v)=>s+v,0)/nRuns;
 
-  // Efeitos e SQ por contraste de Yates
   const effects=[];
   for(let mask=1;mask<Math.pow(2,k);mask++){
     let contraste=0;
@@ -1014,27 +1058,121 @@ function computeFat2k(inputs, outputs) {
       for(let fi=0;fi<k;fi++) if(mask&(1<<fi)) sinal*=sign(r,fi);
       contraste+=sinal*runMeans[r];
     }
-    const efeito=contraste/(nRuns/2);
-    const SQ=(contraste**2*n)/nRuns;
-    effects.push({name:effectName(mask),efeito,SQ});
+    effects.push({name:effectName(mask), efeito:contraste/(nRuns/2), SQ:(contraste**2*n)/nRuns});
   }
 
-  // Erro puro
   let SQE=0;
   if(n>1) state.rows.forEach(row=>{ const r=runIndex(row); SQE+=(parseFloat(row[respIdx])-runMeans[r])**2; });
   const glE=nRuns*(n-1);
   const QME=glE>0?SQE/glE:null;
   const SQT=effects.reduce((s,e)=>s+e.SQ,0)+SQE;
 
-  // Monta texto para o prompt
   let txt=`\n=== VALORES PRÉ-CALCULADOS — USE EXATAMENTE ESTES ===\n`;
   txt+=`Média geral: ${grandMean.toFixed(4)}\n`;
   txt+=`N=${N}, corridas=${nRuns}, réplicas/ponto=${n}\n\n`;
-  txt+=`Efeito | Estimativa | SQ | GL\n`;
-  effects.forEach(e=>{ txt+=`${e.name} | ${e.efeito.toFixed(4)} | ${e.SQ.toFixed(4)} | 1\n`; });
-  txt+=`Erro Puro | — | ${SQE.toFixed(4)} | ${glE}\n`;
+  txt+=`Efeito | Estimativa | SQ | GL${QME?` | F`:''}\n`;
+  effects.forEach(e=>{
+    txt+=`${e.name} | ${e.efeito.toFixed(4)} | ${e.SQ.toFixed(4)} | 1`;
+    if(QME) txt+=` | ${(e.SQ/QME).toFixed(4)}`;
+    txt+='\n';
+  });
+  txt+=`Erro Puro | — | ${SQE.toFixed(4)} | ${glE}${QME?` | —`:''}\n`;
   txt+=`Total | — | ${SQT.toFixed(4)} | ${N-1}\n`;
-  if(QME){ txt+=`QME=${QME.toFixed(4)}\n`; effects.forEach(e=>{ txt+=`F(${e.name})=${(e.SQ/QME).toFixed(4)}\n`; }); }
+  if(QME) txt+=`QME=${QME.toFixed(4)}\n`;
+  txt+=`=== FIM DOS PRÉ-CÁLCULOS — NÃO RECALCULE ===\n`;
+  return txt;
+}
+
+// ── CCD / RSM (OLS via eliminação de Gauss) ───────────────
+function computeCcd(inputs, outputs) {
+  const k=inputs.length, pStar=1+2*k+k*(k-1)/2;
+  const respIdx=state.headers.indexOf(outputs[0]);
+  const inpIdxs=inputs.map(f=>state.headers.indexOf(f));
+  const N=state.rows.length;
+
+  // Monta matriz do modelo X (N × p*)
+  // colunas: 1, x1..xk, x1²..xk², x1x2, x1x3, ..., x(k-1)xk
+  function buildX(row) {
+    const x=inpIdxs.map(i=>parseFloat(row[i]));
+    const cols=[1];
+    x.forEach(xi=>cols.push(xi));                          // lineares
+    x.forEach(xi=>cols.push(xi**2));                       // quadráticos
+    for(let i=0;i<k;i++) for(let j=i+1;j<k;j++) cols.push(x[i]*x[j]); // cruzados
+    return cols;
+  }
+
+  const Xmat=state.rows.map(row=>buildX(row));
+  const y=state.rows.map(row=>parseFloat(row[respIdx]));
+  const yMean=y.reduce((s,v)=>s+v,0)/N;
+
+  // X'X (p* × p*)
+  const XtX=Array.from({length:pStar},(_,i)=>Array.from({length:pStar},(_,j)=>
+    Xmat.reduce((s,row)=>s+row[i]*row[j],0)));
+  // X'y (p* × 1)
+  const Xty=Array.from({length:pStar},(_,i)=>Xmat.reduce((s,row,ri)=>s+row[i]*y[ri],0));
+
+  // Inversão de X'X por eliminação de Gauss-Jordan
+  function invertMatrix(M) {
+    const n=M.length;
+    const aug=M.map((row,i)=>[...row,...Array.from({length:n},(_,j)=>i===j?1:0)]);
+    for(let col=0;col<n;col++){
+      let pivot=col;
+      for(let row=col+1;row<n;row++) if(Math.abs(aug[row][col])>Math.abs(aug[pivot][col])) pivot=row;
+      [aug[col],aug[pivot]]=[aug[pivot],aug[col]];
+      const div=aug[col][col];
+      if(Math.abs(div)<1e-12) throw new Error('Matriz singular — verifique os dados');
+      for(let j=0;j<2*n;j++) aug[col][j]/=div;
+      for(let row=0;row<n;row++){
+        if(row===col) continue;
+        const factor=aug[row][col];
+        for(let j=0;j<2*n;j++) aug[row][j]-=factor*aug[col][j];
+      }
+    }
+    return aug.map(row=>row.slice(n));
+  }
+
+  const XtXinv=invertMatrix(XtX);
+  // β = (X'X)^-1 X'y
+  const beta=Array.from({length:pStar},(_,i)=>XtXinv[i].reduce((s,v,j)=>s+v*Xty[j],0));
+
+  // Valores ajustados e resíduos
+  const yhat=Xmat.map(row=>beta.reduce((s,b,i)=>s+b*row[i],0));
+  const resid=y.map((yi,i)=>yi-yhat[i]);
+
+  // SQ
+  const SQT=y.reduce((s,yi)=>s+(yi-yMean)**2,0);
+  const SQRes=resid.reduce((s,e)=>s+e**2,0);
+  const SQReg=SQT-SQRes;
+
+  // Identificar pontos centrais (todos zeros)
+  const isCentral=state.rows.map(row=>inpIdxs.every(i=>Math.abs(parseFloat(row[i]))<1e-6));
+  const centralY=y.filter((_,i)=>isCentral[i]);
+  const nc=centralY.length;
+  const yBarC=nc>0?centralY.reduce((s,v)=>s+v,0)/nc:0;
+  const SQEp=nc>1?centralY.reduce((s,v)=>s+(v-yBarC)**2,0):0;
+  const glEp=Math.max(0,nc-1);
+  const SQLoF=SQRes-SQEp;
+  const glLoF=Math.max(0,(N-pStar)-glEp);
+  const QMEp=glEp>0?SQEp/glEp:null;
+  const QMLoF=glLoF>0?SQLoF/glLoF:null;
+  const FLoF=(QMEp&&QMEp>0)?QMLoF/QMEp:null;
+  const sigma2=SQRes/(N-pStar);
+
+  // Nomes dos coeficientes
+  const betaNames=['b0',...inputs.map(f=>`b_${f}`),...inputs.map(f=>`b_${f}${f}`)];
+  for(let i=0;i<k;i++) for(let j=i+1;j<k;j++) betaNames.push(`b_${inputs[i]}${inputs[j]}`);
+
+  let txt=`\n=== VALORES PRÉ-CALCULADOS — USE EXATAMENTE ESTES ===\n`;
+  txt+=`N=${N}, p*=${pStar}, média=${yMean.toFixed(4)}\n\n`;
+  txt+=`Coeficientes do modelo:\n`;
+  beta.forEach((b,i)=>{ txt+=`  ${betaNames[i]}=${b.toFixed(4)}, EP=${Math.sqrt(sigma2*XtXinv[i][i]).toFixed(4)}\n`; });
+  txt+=`\nTabela ANOVA:\n`;
+  txt+=`  Regressão: SQ=${SQReg.toFixed(4)}, GL=${pStar-1}, F=${(SQReg/(pStar-1)/sigma2).toFixed(4)}\n`;
+  txt+=`  Lack of Fit: SQ=${SQLoF.toFixed(4)}, GL=${glLoF}${FLoF?`, F=${FLoF.toFixed(4)}`:', F=—'}\n`;
+  txt+=`  Erro Puro: SQ=${SQEp.toFixed(4)}, GL=${glEp}\n`;
+  txt+=`  Resíduo: SQ=${SQRes.toFixed(4)}, GL=${N-pStar}\n`;
+  txt+=`  Total: SQ=${SQT.toFixed(4)}, GL=${N-1}\n`;
+  txt+=`R²=${(SQReg/SQT*100).toFixed(2)}%, σ²=${sigma2.toFixed(4)}\n`;
   txt+=`=== FIM DOS PRÉ-CÁLCULOS — NÃO RECALCULE ===\n`;
   return txt;
 }
@@ -1066,15 +1204,21 @@ async function runAnalysis(){
   logProc(`> Saídas (${outputs.length}): ${outputs.join(', ')}`);
   logProc(`> Linhas: ${state.rows.length}`);
 
-  // ── Pré-calcula 2k no JavaScript (garante precisão) ──────
+  // ── Pré-calcula estatísticas no JavaScript (garante precisão) ──
   let preCalc2k = '';
-  if (state.type==='fat2k') {
-    try {
+  try {
+    if (state.type==='fat2k') {
       preCalc2k = computeFat2k(inputs, outputs);
-      logProc('> Cálculos 2k pré-computados localmente ✓');
-    } catch(e) {
-      logProc(`> Aviso: pré-cálculo falhou (${e.message}), usando API`);
+      logProc('> Efeitos 2k pré-computados localmente ✓');
+    } else if (state.type==='anova1') {
+      preCalc2k = computeAnova1(inputs, outputs);
+      logProc('> ANOVA pré-computada localmente ✓');
+    } else if (state.type==='ccd') {
+      preCalc2k = computeCcd(inputs, outputs);
+      logProc('> CCD (OLS) pré-computado localmente ✓');
     }
+  } catch(e) {
+    logProc(`> Aviso: pré-cálculo falhou (${e.message})`);
   }
 
   logProc('> Chamando API...');
