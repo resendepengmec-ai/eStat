@@ -1125,199 +1125,28 @@ function buildPrompt(csv,inputs,outputs,label){
    Modelo: y_ij = μ + τ_i + ε_ij
    i = 1..a (grupos), j = 1..n_i (réplicas)
    ════════════════════════════════════════════════════ */
-anova1: `
-MODELO ESTATÍSTICO: y_ij = μ + τ_i + ε_ij
-  μ = média geral, τ_i = efeito do i-ésimo tratamento, ε_ij ~ N(0, σ²)
-  Restrição: Σ n_i·τ_i = 0
+anova1: `Realize ANOVA one-way. Calcule SQTr=Σni(ȳi-ȳ)², SQE=Σ(yij-ȳi)², GL_Tr=a-1, GL_E=N-a.
+F=QMTr/QME. Se significativo (p<0,05), aplique Tukey HSD=q·√(QME/n).
+ATENÇÃO: arrays residuos/valores_ajustados com NO MÁXIMO 8 valores.`,
 
-PARTIÇÃO DA VARIAÇÃO TOTAL:
-  SQT  = Σ_i Σ_j (y_ij − ȳ..)²   com GL_T = N − 1
-  SQTr = Σ_i n_i·(ȳ_i. − ȳ..)²   com GL_Tr = a − 1   [entre tratamentos]
-  SQE  = Σ_i Σ_j (y_ij − ȳ_i.)²  com GL_E = N − a    [dentro / erro]
-  Verificação: SQT = SQTr + SQE
+anova2: `Realize MANOVA. Calcule matrizes H e E. Compute Wilks' Λ=|E|/|H+E| e Pillai's Trace.
+Após MANOVA, faça ANOVAs univariadas protegidas (Bonferroni α*=0,05/p) para cada resposta.
+ATENÇÃO: arrays residuos/valores_ajustados com NO MÁXIMO 8 valores.`,
 
-ESTATÍSTICA F:
-  QMTr = SQTr / (a − 1)
-  QME  = SQE  / (N − a)
-  F    = QMTr / QME  ~  F(a−1, N−a) sob H0: τ_1 = τ_2 = ... = τ_a = 0
+/* ── Guias compactos por tipo (economiza tokens na resposta) ── */
+fat2k: `Realize análise fatorial 2^k com k=${k} fatores, ${reps} réplica(s), N=${N} observações.
+Use contrastes de Yates: Efeito = Contraste/(N/2), SQ = Contraste²/N, GL=1 por efeito.
+Erro puro: SQE = soma (y_lr − ȳ_l)², GL_E = ${Math.pow(2,k)*(reps-1)}.
+Calcule TODOS os efeitos principais e interações. F = QM_efeito/QME.
+Interprete nos níveis reais fornecidos.
+ATENÇÃO: arrays residuos/valores_ajustados com NO MÁXIMO 8 valores.`,
 
-ESTIMATIVAS DOS PARÂMETROS:
-  μ̂  = ȳ.. = (Σ_i Σ_j y_ij) / N
-  τ̂_i = ȳ_i. − ȳ..
-  σ̂² = QME  (estimador não-viesado de σ²)
-
-PREMISSAS (verifique):
-  1. Normalidade dos resíduos ε_ij (Shapiro-Wilk se N<50)
-  2. Homogeneidade de variâncias σ²_i (Levene ou Bartlett)
-  3. Independência das observações
-
-COMPARAÇÃO MÚLTIPLA (executar SE F for significativo, p<0.05):
-  Método de Tukey (HSD) — controla o erro familial α:
-    HSD = q_{α,a,ν} · √(QME / n)     [n_i balanceado]
-    ν   = GL_E = N − a
-    q   = quantil da distribuição Studentized Range
-  Declare μ_i ≠ μ_j se |ȳ_i. − ȳ_j.| > HSD
-
-COEFICIENTE DE DETERMINAÇÃO:
-  R² = SQTr / SQT
-
-APRESENTE: tabela ANOVA completa, médias por grupo ± IC 95%, resultado do Tukey,
-  resíduos (e_ij = y_ij − ȳ_i.), conclusão com nomes e unidades reais.`,
-
-/* ════════════════════════════════════════════════════
-   MANOVA (two-group or multi-group)
-   Modelo: Y = X·B + E  (Y: N×p, B: parâmetros, E: erros)
-   ════════════════════════════════════════════════════ */
-anova2: `
-MODELO MULTIVARIADO: y_ij = μ + τ_i + ε_ij   (vetor p-dimensional)
-  y_ij ∈ ℝ^p, ε_ij ~ N_p(0, Σ)  (Σ: matriz de covariância comum)
-
-MATRIZES DE SOMA DE QUADRADOS E PRODUTOS CRUZADOS (SSCP):
-  H = Σ_i n_i·(ȳ_i − ȳ)(ȳ_i − ȳ)'   [hipótese — entre grupos]     GL_H = a−1
-  E = Σ_i Σ_j (y_ij − ȳ_i)(y_ij − ȳ_i)'  [erro — dentro grupos]   GL_E = N−a
-
-CRITÉRIOS MULTIVARIADOS (calcule todos):
-  1. Wilks' Lambda:    Λ = |E| / |H+E|    →  F aproximado de Rao
-     F_Λ ≈ [(1−Λ^(1/s))/Λ^(1/s)] · [(df2)/(df1)]
-     onde s = min(p, a−1),  df1 = p·(a−1),  df2 = s·(GL_E − (p−a+2)/2) − (p·(a−1)−2)/2
-
-  2. Traço de Pillai:  V = tr[H(H+E)⁻¹]  →  F = [V/s]/[(s−V)/s] · (sGL_E − k₀)/(sGL_H)
-
-  3. Traço de Hotelling-Lawley: T² = tr[E⁻¹H]
-
-  4. Maior raiz de Roy: θ_max (raiz de |H − θ(H+E)| = 0)
-
-H0: todos os vetores de médias μ_i são iguais
-Rejeitar H0 se p < 0.05 em pelo menos dois critérios
-
-ANOVAS UNIVARIADAS PROTEGIDAS (post-hoc, após MANOVA significativa):
-  Para cada variável de resposta separadamente:
-  F_j = [SQentre_j/(a−1)] / [SQdentro_j/(N−a)]
-  Aplique correção de Bonferroni: α* = 0.05/p
-
-COMPARAÇÃO DE GRUPOS (se significativo):
-  Calcule distância de Mahalanobis: D² = (ȳ_i − ȳ_j)' Ŝ_p⁻¹ (ȳ_i − ȳ_j)
-  Ŝ_p = E / (N−a)  (matriz de covariância pooled)
-
-APRESENTE: critérios multivariados, F e p de cada, ANOVAs univariadas,
-  médias vetoriais por grupo, box-plot de cada resposta por grupo.`,
-
-/* ════════════════════════════════════════════════════
-   PLANEJAMENTO FATORIAL 2^k
-   N = n·2^k observações (n = réplicas por ponto)
-   ════════════════════════════════════════════════════ */
-fat2k: `
-PLANEJAMENTO FATORIAL 2^k com k=${k} FATORES, ${reps} RÉPLICA(S) POR PONTO
-  N total = ${N} observações, N_runs = ${Math.pow(2,k)} corridas
-
-CODIFICAÇÃO DOS NÍVEIS: x_i ∈ {−1, +1}
-  x_i = (X_i − X̄_i) / (ΔX_i / 2)
-  onde X̄_i = (X_i_hi + X_i_lo)/2 e ΔX_i = X_i_hi − X_i_lo
-
-MODELO LINEAR SATURADO:
-  y = β_0 + Σ β_i·x_i + Σ_{i<j} β_ij·x_i·x_j + ... + β_{12...k}·x_1·x_2·...·x_k + ε
-
-ESTIMAÇÃO PELO MÉTODO DOS CONTRASTES DE YATES:
-  Contraste_i = Σ_l c_{li}·ȳ_l    (c_{li} ∈ {−1,+1} da matriz X'X/N)
-  Efeito_i    = Contraste_i / (N/2)  = Contraste_i · 2 / N
-  β̂_i         = Efeito_i / 2
-
-  VERIFICAÇÃO: Σ c_{li} = 0  e  Σ c_{li}² = N  para todo contraste
-
-SOMAS DE QUADRADOS (exatas):
-  SQ_i = (Contraste_i)² / N       [para cada efeito principal e interação]
-  SQE  = Σ_l Σ_r (y_{lr} − ȳ_l)²  [erro puro, só existe se n > 1]
-  SQT  = Σ_l Σ_r (y_{lr} − ȳ..)²
-  GL de cada efeito = 1
-  GL_E = N_runs·(n−1) = ${Math.pow(2,k)}·(${reps}−1) = ${Math.pow(2,k)*(reps-1)}
-  GL_T = N−1 = ${N-1}
-
-TABELA ANOVA COMPLETA:
-  Fonte        | GL  | SQ         | QM=SQ/GL | F=QM/QME | p-valor
-  Fator A      | 1   | SQ_A       | QM_A     | F_A      | p_A
-  Fator B      | 1   | SQ_B       | ...
-  ...
-  AB           | 1   | SQ_AB      | ...
-  ${k>=3?'ABC          | 1   | SQ_ABC     | ...':''}
-  ${k>=3?'...          | ... | ...        | ...':''}
-  Erro puro    | ${Math.pow(2,k)*(reps-1)} | SQE     | QME      | —        | —
-  Total        | ${N-1} | SQT       | —        | —        | —
-
-  (Se n=1: não há Erro puro; use interações de alta ordem como estimativa de σ²)
-
-FRAÇÃO DE VARIAÇÃO EXPLICADA:
-  R² = 1 − SQE/SQT
-  Efeito é significativo se |F| > F_{crit}(1, GL_E; α=0.05)
-
-GRÁFICOS OBRIGATÓRIOS:
-  1. Gráfico de Pareto dos efeitos (|efeito| em ordem decrescente + linha α)
-  2. Gráficos de efeitos principais: ȳ(x_i=−1) vs ȳ(x_i=+1) para cada fator
-  3. Gráficos de interação: para cada par (i,j) significativo
-  4. Normal plot dos efeitos (half-normal plot se n=1)
-  5. Gráfico de resíduos vs valores ajustados
-
-INTERPRETE CADA EFEITO NOS NÍVEIS REAIS fornecidos.
-Um efeito positivo de magnitude E significa que aumentar o fator do nível baixo para o alto
-aumenta a resposta em E unidades (em média).`,
-
-/* ════════════════════════════════════════════════════
-   PLANEJAMENTO COMPOSTO CENTRAL (CCD / RSM)
-   Pontos: 2^k fatoriais + 2k axiais + n_0 centrais
-   ════════════════════════════════════════════════════ */
-ccd: `
-PLANEJAMENTO COMPOSTO CENTRAL (CCD) — SUPERFÍCIE DE RESPOSTA com k=${k} fatores
-  Estrutura: ${Math.pow(2,k)} pontos fatoriais + ${2*k} axiais + ${state.ccd?.centerPts||3} centrais = ${Math.pow(2,k)+2*k+(state.ccd?.centerPts||3)} pontos
-  α (raio axial rotável) = 2^(k/4) = ${Math.pow(2,k/4).toFixed(4)}
-    (garante variância de predição uniforme em |x|=α)
-
-MODELO DE SEGUNDA ORDEM (QUADRÁTICO COMPLETO):
-  ŷ = β_0 + Σ_i β_i·x_i + Σ_i β_{ii}·x_i² + Σ_{i<j} β_{ij}·x_i·x_j + ε
-  Número de parâmetros p* = 1 + k + k + C(k,2) = 1 + 2k + k(k−1)/2 = ${1+2*k+k*(k-1)/2}
-  ε ~ N(0, σ²)
-
-ESTIMAÇÃO (Mínimos Quadrados Ordinários):
-  Modelo matricial: y = X·β + ε   (X: matriz do modelo N×p*)
-  β̂ = (X'X)⁻¹·X'·y
-  Ŷ = X·β̂    (valores ajustados)
-  e  = y − Ŷ  (resíduos)
-
-PARTIÇÃO DA SQ:
-  SQT    = y'y − N·ȳ²                                GL_T = N−1
-  SQReg  = β̂'X'y − N·ȳ²                             GL_Reg = p*−1
-  SQRes  = SQT − SQReg                               GL_Res = N−p*
-  SQLoF  = SQRes − SQEp  [Lack of Fit]               GL_LoF = GL_Res − GL_Ep
-  SQEp   = Σ_j Σ_r (y_jr − ȳ_j)²  [Erro Puro, pontos centrais]  GL_Ep = n_0−1 = ${(state.ccd?.centerPts||3)-1}
-
-TESTE F DA REGRESSÃO:
-  F_Reg = (SQReg/(p*−1)) / (SQRes/(N−p*))   ~  F(p*−1, N−p*)
-
-TESTE DE FALTA DE AJUSTE (Lack of Fit):
-  F_LoF = (SQLoF/GL_LoF) / (SQEp/GL_Ep)
-  H0: modelo quadrático é adequado (deseja-se NÃO rejeitar H0)
-
-COEFICIENTES E SIGNIFICÂNCIA:
-  EP(β̂_i) = √[σ̂²·(X'X)⁻¹_{ii}]     onde σ̂² = SQRes/(N−p*)
-  t_i      = β̂_i / EP(β̂_i)           ~  t(N−p*)
-
-ANÁLISE DA SUPERFÍCIE DE RESPOSTA (ponto estacionário):
-  ∂ŷ/∂x_i = 0   ∀ i   →  sistema linear: 2B·x_s = −b
-  Onde B = matriz p×p dos coeficientes quadráticos e cruzados (β_{ij}/2 fora da diagonal)
-  e b = vetor dos coeficientes lineares
-
-  Classificação do ponto estacionário x_s:
-    Todos autovalores de B > 0 → mínimo
-    Todos autovalores de B < 0 → máximo
-    Autovalores mistos         → ponto de sela
-
-  Converter x_s para unidades reais: X_s,i = x_s,i · (ΔX_i/2) + X̄_i
-
-GRÁFICOS OBRIGATÓRIOS:
-  1. Superfície de resposta 3D (para cada par de fatores)
-  2. Curvas de contorno (nível) no plano x_i × x_j
-  3. Resíduos vs ŷ e Normal Q-Q dos resíduos
-  4. Gráfico de Lack of Fit
-
-INTERPRETE β̂ nos níveis reais. Informe o ponto ótimo nas unidades reais.`,
+ccd: `Realize RSM/CCD com k=${k} fatores, α=${Math.pow(2,k/4).toFixed(3)}, N=${N} pontos.
+Ajuste modelo quadrático completo (${1+2*k+k*(k-1)/2} parâmetros) por OLS.
+Particione: SQReg, SQLoF, SQEp (pontos centrais), SQRes. Teste LoF.
+Calcule ponto estacionário x_s = -B⁻¹b/2, classifique pelos autovalores de B.
+Converta x_s para unidades reais.
+ATENÇÃO: arrays residuos/valores_ajustados com NO MÁXIMO 8 valores.`,
 
   }[state.type]||'';
 
@@ -1347,12 +1176,11 @@ anova2: `{
 }`,
 fat2k: `{
   "resumo": "2-3 parágrafos: efeitos significativos, magnitudes, interações, interpretação real",
-  "contrastes": [{"efeito":"A","contraste":0.0,"estimativa_efeito":0.0,"sq":0.0}],
-  "estatisticas_descritivas": {"por_variavel": [{"variavel":"","n":0,"media":0.0,"dp":0.0,"min":0.0,"max":0.0,"mediana":0.0,"cv":0.0,"ic_inf_95":0.0,"ic_sup_95":0.0}]},
+  "estatisticas_descritivas": {"por_variavel": [{"variavel":"","n":0,"media":0.0,"dp":0.0,"min":0.0,"max":0.0,"mediana":0.0,"cv":0.0}]},
   "tabela_anova": [{"fonte":"A","gl":1,"sq":0.0,"qm":0.0,"f":0.0,"p_valor":0.0,"significativo":true}],
   "efeitos": [{"nome":"A","estimativa":0.0,"erro_padrao":0.0,"t":0.0,"p_valor":0.0}],
   "r2": 0.0, "r2_ajustado": 0.0,
-  "conclusao": "Fatores/interações significativos, sentido do efeito nos níveis reais, configuração ótima sugerida",
+  "conclusao": "Fatores/interações significativos, sentido do efeito nos níveis reais, configuração ótima",
   "dados_graficos": {
     "medias_por_grupo":[{"grupo":"","media":0.0,"ic_inf":0.0,"ic_sup":0.0}],
     "residuos":[0.0,0.0,0.0,0.0,0.0],"valores_ajustados":[0.0,0.0,0.0,0.0,0.0],
